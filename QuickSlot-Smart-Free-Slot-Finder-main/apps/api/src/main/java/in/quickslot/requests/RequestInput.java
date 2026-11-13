@@ -10,4 +10,6 @@ public record RequestInput(
     @NotNull LocalTime startTime,
     @NotNull LocalTime endTime,
     @NotBlank @Size(min = 3, max = 500) String purpose,
-    @Min(1) @Max(5000) int attendance) {}
+    @Min(1) @Max(5000) int attendance,
+    String participantGroup,
+    String requiredEquipment) {}

@@ -5,7 +5,7 @@ import { canRequest, canReview, canViewFaculty, useAuth } from "../lib/auth";
 import { roleName } from "../lib/format";
 
 export function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -62,6 +62,7 @@ export function Layout() {
                   <NavLink to="/teachers">Faculty timetable</NavLink>
                 )}
                 <NavLink to="/clubs">Clubs</NavLink>
+                <NavLink to="/lab">OS & DBMS Lab</NavLink>
                 {canRequest(user?.role) && (
                   <NavLink to="/requests">My requests</NavLink>
                 )}
@@ -74,6 +75,55 @@ export function Layout() {
                     <NavLink to="/admin/rooms">Room register</NavLink>
                   </>
                 )}
+                <div style={{ marginLeft: "6px" }}>
+                  <select
+                    aria-label="Demo role switcher"
+                    value={user?.role || ""}
+                    onChange={async (e) => {
+                      const targetRole = e.target.value;
+                      if (targetRole) {
+                        try {
+                          await switchRole(targetRole);
+                        } catch {
+                          setError("Failed to switch demo persona");
+                        }
+                      }
+                    }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.12)",
+                      color: "#edf0f4",
+                      border: "1px solid rgba(255, 255, 255, 0.25)",
+                      borderRadius: "6px",
+                      padding: "6px 10px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                    title="Switch demo persona for evaluation"
+                  >
+                    <option value="" disabled style={{ color: "#202020", background: "#fff" }}>
+                      Switch Persona…
+                    </option>
+                    <option value="STUDENT" style={{ color: "#202020", background: "#fff" }}>
+                      🎓 Student
+                    </option>
+                    <option value="FACULTY" style={{ color: "#202020", background: "#fff" }}>
+                      👨‍🏫 Faculty
+                    </option>
+                    <option value="CLUB_HEAD" style={{ color: "#202020", background: "#fff" }}>
+                      🎭 Club Head
+                    </option>
+                    <option value="COORDINATOR" style={{ color: "#202020", background: "#fff" }}>
+                      📋 Coordinator
+                    </option>
+                    <option value="HOD" style={{ color: "#202020", background: "#fff" }}>
+                      🏛️ HOD
+                    </option>
+                    <option value="ADMIN" style={{ color: "#202020", background: "#fff" }}>
+                      ⚙️ Admin
+                    </option>
+                  </select>
+                </div>
                 {user ? (
                   <div className="user-nav">
                     <span>
@@ -121,6 +171,7 @@ export function Layout() {
               <Link to="/teachers">Faculty timetable</Link>
             )}
             <Link to="/clubs">Club profiles</Link>
+            <Link to="/lab">OS & DBMS Lab</Link>
             <Link to="/login">Sign in</Link>
           </nav>
           <div className="footer-guidance">

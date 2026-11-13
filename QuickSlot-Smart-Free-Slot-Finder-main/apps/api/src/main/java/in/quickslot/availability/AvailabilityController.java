@@ -25,16 +25,65 @@ public class AvailabilityController {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Map<String, ?> search(
       @RequestParam LocalDate date,
-      @RequestParam("start_time") LocalTime start,
-      @RequestParam("end_time") LocalTime end) {
-    AvailabilityService.validateWindow(start, end);
+      @RequestParam(value = "start_time", required = false) LocalTime start,
+      @RequestParam(value = "end_time", required = false) LocalTime end,
+      @RequestParam(value = "kind", required = false) String kind,
+      @RequestParam(value = "building", required = false) String building,
+      @RequestParam(value = "floor", required = false) String floor,
+      @RequestParam(value = "min_capacity", required = false) Integer minCapacity,
+      @RequestParam(value = "has_projector", required = false) Boolean hasProjector,
+      @RequestParam(value = "has_ac", required = false) Boolean hasAc) {
+    LocalTime startTime = start != null ? start : LocalTime.of(9, 0);
+    LocalTime endTime = end != null ? end : LocalTime.of(10, 0);
+    AvailabilityService.validateWindow(startTime, endTime);
+
+    var filteredRooms = rooms.publicRooms().stream().filter(r -> {
+      if (kind != null && !kind.isBlank() && !r.kind().equalsIgnoreCase(kind.trim())) return false;
+      if (building != null && !building.isBlank() && !r.building().equalsIgnoreCase(building.trim())) return false;
+      if (floor != null && !floor.isBlank() && (r.floor() == null || !r.floor().equalsIgnoreCase(floor.trim()))) return false;
+      if (minCapacity != null && (r.capacity() == null || r.capacity() < minCapacity)) return false;
+      if (hasProjector != null && hasProjector && !r.hasProjector()) return false;
+      if (hasAc != null && hasAc && !r.hasAc()) return false;
+      return true;
+    }).toList();
+
     return Map.of(
         "date",
         date,
         "rooms",
-        rooms.publicRooms().stream().map(r -> availability.room(r, date, start, end)).toList(),
+        filteredRooms.stream().map(r -> availability.room(r, date, startTime, endTime)).toList(),
         "coverage_notice",
         AvailabilityService.NOTICE);
+  }
+
+  @GetMapping("/availability/check-clash")
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public Map<String, ?> checkClash(
+      @RequestParam("room_id") String roomId,
+      @RequestParam LocalDate date,
+      @RequestParam("start_time") LocalTime start,
+      @RequestParam("end_time") LocalTime end) {
+    AvailabilityService.validateWindow(start, end);
+    var room = rooms.get(roomId);
+    String state = availability.state(room.id(), date, start, end);
+    boolean hasClash = state.equals("OCCUPIED");
+    var busyIntervals = availability.busy(room.id(), date);
+
+    return Map.of(
+        "room_id", roomId,
+        "room_code", room.code(),
+        "date", date,
+        "start_time", start,
+        "end_time", end,
+        "state", state,
+        "has_clash", hasClash,
+        "reason", switch (state) {
+          case "OCCUPIED" -> "Selected time slot clashes with an existing class or confirmed booking.";
+          case "AVAILABLE" -> "Room is verified free from timetable classes and bookings.";
+          default -> "Room availability is unverified for this period.";
+        },
+        "busy_intervals", busyIntervals
+    );
   }
 
   @GetMapping("/rooms/{id}/schedule")

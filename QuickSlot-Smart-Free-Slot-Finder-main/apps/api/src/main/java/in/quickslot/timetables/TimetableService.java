@@ -565,14 +565,70 @@ public class TimetableService implements TimetableLookup {
         }
     }
     sessions.sort(java.util.Comparator.comparing(entry -> (String) entry.get("start_time")));
-    return Map.of(
-        "teacher",
-        teacher.get(0),
-        "date",
-        date,
-        "sessions",
-        sessions,
-        "notice",
-        "Scheduled teaching venues; not live location or meeting availability.");
+
+    List<Map<String, Object>> freePeriods = new ArrayList<>();
+    LocalTime cursor = LocalTime.of(9, 0);
+    LocalTime workEnd = LocalTime.of(17, 0);
+    for (var session : sessions) {
+      LocalTime sStart = LocalTime.parse((String) session.get("start_time"));
+      LocalTime sEnd = LocalTime.parse((String) session.get("end_time"));
+      if (sStart.isAfter(cursor)) {
+        long duration = java.time.Duration.between(cursor, sStart).toMinutes();
+        if (duration >= 30) {
+          freePeriods.add(
+              Map.of(
+                  "start_time", cursor.toString(),
+                  "end_time", sStart.toString(),
+                  "duration_minutes", duration));
+        }
+      }
+      if (sEnd.isAfter(cursor)) {
+        cursor = sEnd;
+      }
+    }
+    if (cursor.isBefore(workEnd)) {
+      long duration = java.time.Duration.between(cursor, workEnd).toMinutes();
+      if (duration >= 30) {
+        freePeriods.add(
+            Map.of(
+                "start_time", cursor.toString(),
+                "end_time", workEnd.toString(),
+                "duration_minutes", duration));
+      }
+    }
+
+    Map<String, Object> nextClass = null;
+    LocalTime now = LocalTime.now(INDIA);
+    if (date.equals(LocalDate.now(INDIA))) {
+      for (var session : sessions) {
+        LocalTime sStart = LocalTime.parse((String) session.get("start_time"));
+        if (sStart.isAfter(now)) {
+          nextClass = session;
+          break;
+        }
+      }
+    }
+
+    String dayName = switch (date.getDayOfWeek()) {
+      case MONDAY -> "Monday";
+      case TUESDAY -> "Tuesday";
+      case WEDNESDAY -> "Wednesday";
+      case THURSDAY -> "Thursday";
+      case FRIDAY -> "Friday";
+      case SATURDAY -> "Saturday";
+      case SUNDAY -> "Sunday";
+    };
+
+    var result = new LinkedHashMap<String, Object>();
+    result.put("teacher", teacher.get(0));
+    result.put("date", date);
+    result.put("day_name", dayName);
+    result.put("day_of_week", date.getDayOfWeek().getValue());
+    result.put("sessions", sessions);
+    result.put("scheduled_classes", sessions);
+    result.put("free_periods", freePeriods);
+    if (nextClass != null) result.put("next_scheduled_class", nextClass);
+    result.put("notice", "Scheduled teaching venues; not live location or meeting availability.");
+    return result;
   }
 }

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowUpRight,
+  CheckCircle2,
+} from "lucide-react";
 import { api } from "../lib/api";
-import type { Room } from "../lib/types";
+import type { ClashCheckResult, Room } from "../lib/types";
 import { campusToday } from "../lib/format";
 import { ErrorText, Notice, PageHeading } from "../components/ui";
 import { HourSlotSelect } from "../components/HourSlotSelect";
@@ -11,19 +16,54 @@ export function RequestForm() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [roomId, setRoomId] = useState(params.get("room_id") || "");
+  const [roomId, setRoomId] = useState(
+    params.get("roomId") || params.get("room_id") || "",
+  );
   const [date, setDate] = useState(params.get("date") || campusToday());
-  const [start, setStart] = useState(params.get("start_time") || "10:00");
-  const [end, setEnd] = useState(params.get("end_time") || "11:00");
+  const [start, setStart] = useState(
+    params.get("start") || params.get("start_time") || "10:00",
+  );
+  const [end, setEnd] = useState(
+    params.get("end") || params.get("end_time") || "11:00",
+  );
+  const [participantGroup, setParticipantGroup] = useState("");
+  const [requiredEquipment, setRequiredEquipment] = useState("");
   const [purpose, setPurpose] = useState("");
   const [attendance, setAttendance] = useState("");
+  const [clashStatus, setClashStatus] = useState<ClashCheckResult | null>(null);
+  const [checkingClash, setCheckingClash] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const key = useRef(crypto.randomUUID());
   const lastPayload = useRef("");
+
   useEffect(() => {
     api.rooms().then(setRooms).catch(setError);
   }, []);
+
+  useEffect(() => {
+    if (!roomId || !date || !start || !end || end <= start) {
+      setClashStatus(null);
+      return;
+    }
+    let active = true;
+    setCheckingClash(true);
+    api
+      .checkClash(roomId, date, start, end)
+      .then((res) => {
+        if (active) setClashStatus(res);
+      })
+      .catch(() => {
+        if (active) setClashStatus(null);
+      })
+      .finally(() => {
+        if (active) setCheckingClash(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [roomId, date, start, end]);
+
   const selected = rooms.find((room) => room.id === roomId);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -39,6 +79,8 @@ export function RequestForm() {
       end_time: end,
       purpose: purpose.trim(),
       attendance: Number(attendance),
+      participant_group: participantGroup.trim() || undefined,
+      required_equipment: requiredEquipment.trim() || undefined,
     };
     const serialized = JSON.stringify(payload);
     if (lastPayload.current && lastPayload.current !== serialized)
@@ -104,9 +146,85 @@ export function RequestForm() {
             }}
           />
         </div>
+
+        {/* Live Clash Check Feedback */}
+        {roomId && (
+          <div style={{ marginTop: "4px" }}>
+            {checkingClash ? (
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--muted)",
+                  padding: "6px 10px",
+                }}
+              >
+                Checking room clash & timetable…
+              </div>
+            ) : clashStatus ? (
+              clashStatus.has_clash ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#991b1b",
+                    fontSize: "13px",
+                  }}
+                >
+                  <AlertTriangle size={16} />
+                  <span>
+                    <strong>Conflict Warning:</strong> {clashStatus.reason}
+                  </span>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    color: "#166534",
+                    fontSize: "13px",
+                  }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>
+                    <strong>Slot Clear:</strong> {clashStatus.reason}
+                  </span>
+                </div>
+              )
+            ) : null}
+          </div>
+        )}
+
         <div className="form-section-title">
           <span>Your plans</span>
         </div>
+        <label>
+          Club, society or student group
+          <input
+            type="text"
+            placeholder="e.g. IEEE Student Branch, Cultural Club, CSE 3rd Year"
+            value={participantGroup}
+            onChange={(e) => setParticipantGroup(e.target.value)}
+          />
+        </label>
+        <label>
+          Required facilities / equipment
+          <input
+            type="text"
+            placeholder="e.g. Projector & Collar Mic, Lab Workstations, Sound System"
+            value={requiredEquipment}
+            onChange={(e) => setRequiredEquipment(e.target.value)}
+          />
+        </label>
         <label>
           What is the room for?
           <textarea

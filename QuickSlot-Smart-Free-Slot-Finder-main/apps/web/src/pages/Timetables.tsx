@@ -100,7 +100,7 @@ export function Timetables() {
         sessions,
         coverage,
         acknowledge,
-        selected.version,
+        selected.version ?? selected.expected_revision ?? 0,
       );
       setSelected(result);
       setDirty(false);
@@ -118,7 +118,10 @@ export function Timetables() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.publish(selected.id, selected.version);
+      const result = await api.publish(
+        selected.id,
+        selected.version ?? selected.expected_revision ?? 0,
+      );
       setSelected(result);
       setDirty(false);
       setSuccess(

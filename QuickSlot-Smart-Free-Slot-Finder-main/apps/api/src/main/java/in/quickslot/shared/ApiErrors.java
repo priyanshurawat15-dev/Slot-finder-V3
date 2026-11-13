@@ -32,7 +32,8 @@ public class ApiErrors {
     HttpMessageNotReadableException.class
   })
   public ResponseEntity<?> malformed(Exception error) {
-    return ResponseEntity.badRequest().body(Map.of("detail", "Invalid request format."));
+    return ResponseEntity.badRequest()
+        .body(Map.of("detail", "Invalid request format: " + (error.getCause() != null ? error.getCause().getMessage() : error.getMessage())));
   }
 
   @ExceptionHandler(DataIntegrityViolationException.class)

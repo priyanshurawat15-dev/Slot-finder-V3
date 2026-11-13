@@ -7,6 +7,17 @@ import type {
   Session,
   ImportSession,
   ImportVersion,
+  ClashCheckResult,
+  OverviewSummary,
+  AdminStats,
+  AuditLogEntry,
+  TeacherScheduleResult,
+  FcfsJob,
+  FcfsResult,
+  DeadlockResult,
+  SyncResult,
+  ConcurrencyRaceResult,
+  User,
 } from "./types";
 let csrfToken = "";
 export class ApiError extends Error {
@@ -172,17 +183,46 @@ export const api = {
     }),
   teachers: () => send<{ id: string; name: string }[]>("/timetables/teachers"),
   teacherSchedule: (id: string, date: string) =>
-    send<{
-      teacher: { id: string; name: string };
-      date: string;
-      notice: string;
-      sessions: {
-        start_time: string;
-        end_time: string;
-        subject: string;
-        room_id: string | null;
-        room_code: string | null;
-        building: string | null;
-      }[];
-    }>(`/timetables/teachers/${encodeURIComponent(id)}/schedule?date=${date}`),
+    send<TeacherScheduleResult>(
+      `/timetables/teachers/${encodeURIComponent(id)}/schedule?date=${date}`,
+    ),
+
+  // Demo Auth & Role Switching
+  switchDemoRole: (role: string) =>
+    session(`/auth/switch-demo-role?role=${encodeURIComponent(role)}`, {
+      method: "POST",
+    }),
+  demoUsers: () => send<User[]>("/auth/users"),
+
+  // Availability & Clash Check
+  checkClash: (roomId: string, date: string, startTime: string, endTime: string) =>
+    send<ClashCheckResult>(
+      `/availability/check-clash?room_id=${encodeURIComponent(roomId)}&date=${encodeURIComponent(date)}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`,
+    ),
+
+  // Admin Overview & Auditing
+  overviewSummary: () => send<OverviewSummary>("/admin/overview-summary"),
+  adminStats: () => send<AdminStats>("/admin/stats"),
+  auditLogs: () => send<AuditLogEntry[]>("/admin/audit-logs"),
+
+  // OS & DBMS Practical Verification Lab
+  runFcfs: (jobs?: FcfsJob[]) =>
+    send<FcfsResult>("/demo/fcfs", {
+      method: "POST",
+      body: JSON.stringify(jobs || []),
+    }),
+  runDeadlock: (mode: "deadlock" | "prevent" = "deadlock") =>
+    send<DeadlockResult>(`/demo/deadlock?mode=${encodeURIComponent(mode)}`, {
+      method: "POST",
+    }),
+  runSync: (numThreads = 10, increments = 1000, useMutex = true) =>
+    send<SyncResult>(
+      `/demo/sync?num_threads=${numThreads}&increments_per_thread=${increments}&use_mutex=${useMutex}`,
+      { method: "POST" },
+    ),
+  runConcurrencyRace: (numCompeting = 20) =>
+    send<ConcurrencyRaceResult>(
+      `/demo/concurrency-race?num_competing=${numCompeting}`,
+      { method: "POST" },
+    ),
 };

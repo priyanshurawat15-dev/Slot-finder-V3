@@ -20,6 +20,7 @@ import { Teachers } from "./pages/Teachers";
 import { RoomRegister } from "./pages/RoomRegister";
 import { Clubs } from "./pages/Clubs";
 import { ClubProfile } from "./pages/ClubProfile";
+import { OsDbmsLab } from "./pages/OsDbmsLab";
 function Protected({
   children,
   mode,
@@ -74,6 +75,7 @@ export function App() {
           />
           <Route path="clubs" element={<Clubs />} />
           <Route path="clubs/:slug" element={<ClubProfile />} />
+          <Route path="lab" element={<OsDbmsLab />} />
           <Route path="login" element={<Login />} />
           <Route
             path="requests/new"

@@ -42,4 +42,18 @@ public class AuthController {
         .header(HttpHeaders.SET_COOKIE, auth.logout(request))
         .body(Map.of("message", "Logged out."));
   }
+
+  @PostMapping("/switch-demo-role")
+  public ResponseEntity<?> switchDemoRole(
+      @RequestParam("role") String role, HttpServletRequest request) {
+    var result = auth.switchDemoRole(role, request);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.SET_COOKIE, result.cookie())
+        .body(Map.of("user", result.user(), "csrf_token", result.csrfToken(), "message", "Switched to " + result.user().role()));
+  }
+
+  @GetMapping("/users")
+  public Object demoUsers() {
+    return auth.demoUsers();
+  }
 }

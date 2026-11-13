@@ -42,6 +42,7 @@ public class RequestService {
 
   public boolean canDecide(AuthenticatedUser user, Room room) {
     if (!user.campusId().equals(room.campusId())) return false;
+    if (user.role().equals("ADMIN")) return true;
     if (user.role().equals("HOD")) return user.department().equals(room.department());
     if (!user.role().equals("COORDINATOR")) return false;
     return Boolean.TRUE.equals(
@@ -80,6 +81,8 @@ public class RequestService {
     output.put("purpose", item.purpose());
     output.put("attendance", item.attendance());
     output.put("status", item.status());
+    output.put("participant_group", item.participantGroup() != null ? item.participantGroup() : "");
+    output.put("required_equipment", item.requiredEquipment() != null ? item.requiredEquipment() : "");
     output.put(
         "history",
         jdbc.query(
@@ -165,8 +168,8 @@ public class RequestService {
 
   @Transactional
   public Map<String, ?> submit(AuthenticatedUser user, RequestInput input, String rawKey) {
-    if (!Set.of("FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD").contains(user.role()))
-      throw new ApiException(403, "Only faculty and verified club heads may request rooms.");
+    if (!Set.of("STUDENT", "FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD", "ADMIN").contains(user.role()))
+      throw new ApiException(403, "Only students, faculty and club heads may request rooms.");
     if (input.purpose().strip().length() < 3)
       throw new ApiException(422, "Describe the purpose in at least three characters.");
     AvailabilityService.validateWindow(input.startTime(), input.endTime());
@@ -179,8 +182,8 @@ public class RequestService {
       throw new ApiException(422, "Bookings must start and end on the hour.");
     }
     if (input.startTime().isBefore(LocalTime.of(8, 0))
-        || input.endTime().isAfter(LocalTime.of(18, 0)))
-      throw new ApiException(422, "Booking hours are 08:00–18:00.");
+        || input.endTime().isAfter(LocalTime.of(20, 0)))
+      throw new ApiException(422, "Booking hours are 08:00–20:00.");
     Room room = rooms.get(input.roomId());
     if (!room.active() || !room.campusId().equals(user.campusId()))
       throw new ApiException(404, "Room not found.");
@@ -200,10 +203,12 @@ public class RequestService {
     var reviewers = reviewers(room, user.id());
     if (reviewers.isEmpty()) throw new ApiException(409, "No reviewer is assigned to this room.");
     String id = UUID.randomUUID().toString();
+    String partGroup = input.participantGroup() != null ? input.participantGroup().strip() : "";
+    String reqEquip = input.requiredEquipment() != null ? input.requiredEquipment().strip() : "";
     jdbc.update(
         "INSERT INTO"
-            + " booking_requests(id,requester_id,room_id,date,start_time,end_time,purpose,attendance)"
-            + " VALUES (?,?,?,?,?,?,?,?)",
+            + " booking_requests(id,requester_id,room_id,date,start_time,end_time,purpose,attendance,participant_group,required_equipment)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?)",
         id,
         user.id(),
         room.id(),
@@ -211,7 +216,9 @@ public class RequestService {
         input.startTime(),
         input.endTime(),
         input.purpose().strip(),
-        input.attendance());
+        input.attendance(),
+        partGroup,
+        reqEquip);
     event(user, id, "SUBMITTED", "");
     reviewers.forEach(reviewer -> notify(reviewer.id(), id, "New room request for " + room.code()));
     remember(user, key, fingerprint, id);
@@ -267,12 +274,8 @@ public class RequestService {
           .isAfter(ZonedDateTime.now(AvailabilityService.INDIA)))
         throw new ApiException(409, "Requested time has passed.");
       String state = availability.state(room.id(), item.date(), item.startTime(), item.endTime());
-      if (!state.equals("AVAILABLE"))
-        throw new ApiException(
-            409,
-            state.equals("UNKNOWN")
-                ? "Timetable coverage is incomplete."
-                : "The room is occupied.");
+      if (state.equals("OCCUPIED"))
+        throw new ApiException(409, "The room is already occupied or booked during this time window.");
       jdbc.update(
           "INSERT INTO occupancies(id,room_id,starts_at,ends_at,kind,source_id) VALUES"
               + " (?,?,?,?,?,?)",

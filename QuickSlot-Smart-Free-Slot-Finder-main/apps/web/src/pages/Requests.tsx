@@ -160,6 +160,8 @@ export function Requests({ review = false }: { review?: boolean }) {
                     <h2>{request.purpose}</h2>
                     <p>
                       {request.requester_name} · {request.attendance} people
+                      {request.participant_group && ` · Group: ${request.participant_group}`}
+                      {request.required_equipment && ` · Equipment: ${request.required_equipment}`}
                     </p>
                   </div>
                   <Status value={request.status} />
