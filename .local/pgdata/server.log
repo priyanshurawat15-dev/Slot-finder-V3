@@ -1,0 +1,12 @@
+2026-11-13 21:36:30.800 IST [3864] LOG:  starting PostgreSQL 18.4 on x86_64-windows, compiled by msvc-19.44.35226, 64-bit
+2026-11-13 21:36:30.811 IST [3864] LOG:  could not bind IPv6 address "::1": Permission denied
+2026-11-13 21:36:30.811 IST [3864] LOG:  could not bind IPv4 address "127.0.0.1": Permission denied
+2026-11-13 21:36:30.811 IST [3864] WARNING:  could not create listen socket for "localhost"
+2026-11-13 21:36:30.811 IST [3864] FATAL:  could not create any TCP/IP sockets
+2026-11-13 21:36:30.815 IST [3864] LOG:  database system is shut down
+2026-11-13 21:37:04.336 IST [31264] LOG:  starting PostgreSQL 18.4 on x86_64-windows, compiled by msvc-19.44.35226, 64-bit
+2026-11-13 21:37:04.344 IST [31264] LOG:  listening on IPv6 address "::1", port 5433
+2026-11-13 21:37:04.347 IST [31264] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2026-11-13 21:37:04.453 IST [24628] LOG:  database system was shut down at 2026-11-13 21:28:27 IST
+2026-11-13 21:37:04.465 IST [31264] LOG:  database system is ready to accept connections
+2026-11-13 21:37:06.728 IST [9080] FATAL:  role "priya" does not exist
