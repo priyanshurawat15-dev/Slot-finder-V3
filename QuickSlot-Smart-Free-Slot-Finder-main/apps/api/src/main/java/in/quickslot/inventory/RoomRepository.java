@@ -16,6 +16,15 @@ public class RoomRepository {
   }
 
   private Room map(ResultSet row, int index) throws SQLException {
+    boolean hasProjector = true;
+    boolean hasAc = true;
+    boolean hasAudio = false;
+    try {
+      hasProjector = row.getBoolean("has_projector");
+      hasAc = row.getBoolean("has_ac");
+      hasAudio = row.getBoolean("has_audio");
+    } catch (SQLException ignored) {}
+
     return new Room(
         row.getString("id"),
         row.getString("code"),
@@ -26,7 +35,10 @@ public class RoomRepository {
         row.getString("department"),
         row.getBoolean("active"),
         row.getString("source_label"),
-        row.getString("floor"));
+        row.getString("floor"),
+        hasProjector,
+        hasAc,
+        hasAudio);
   }
 
   public List<Room> publicRooms() {

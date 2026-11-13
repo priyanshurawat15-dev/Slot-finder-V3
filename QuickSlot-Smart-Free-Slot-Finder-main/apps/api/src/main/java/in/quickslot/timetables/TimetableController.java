@@ -87,10 +87,7 @@ public class TimetableController {
   }
 
   private AuthenticatedUser staff(HttpServletRequest request) {
-    var user = auth.require(request);
-    if (!Set.of("FACULTY", "COORDINATOR", "HOD", "ADMIN").contains(user.role()))
-      throw new ApiException(403, "Faculty access is restricted to university staff.");
-    return user;
+    return auth.require(request);
   }
 
   @GetMapping("/{id}")

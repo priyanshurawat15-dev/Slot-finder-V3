@@ -39,7 +39,7 @@ public class RoomController {
 
   public record RoomInput(
       @NotBlank @Size(max = 80) String code,
-      @Pattern(regexp = "CLASSROOM|LT") @NotNull String kind,
+      @Pattern(regexp = "CLASSROOM|LT|LAB|SEMINAR_HALL|AUDITORIUM") @NotNull String kind,
       @NotBlank @Size(max = 100) String building,
       @Min(1) @Max(5000) int capacity,
       @Size(max = 60) String floor) {}
@@ -58,6 +58,9 @@ public class RoomController {
     result.put("capacity", room.capacity());
     result.put("source_label", room.sourceLabel());
     result.put("floor", room.floor());
+    result.put("has_projector", room.hasProjector());
+    result.put("has_ac", room.hasAc());
+    result.put("has_audio", room.hasAudio());
     return result;
   }
 

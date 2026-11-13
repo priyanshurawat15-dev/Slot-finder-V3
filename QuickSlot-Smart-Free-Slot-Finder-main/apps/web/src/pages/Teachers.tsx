@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Search } from "lucide-react";
+import { Clock, MapPin, Search } from "lucide-react";
 import { api } from "../lib/api";
 import { campusToday, time } from "../lib/format";
 import { useAuth } from "../lib/auth";
@@ -105,12 +105,181 @@ export function Teachers() {
               />
             </label>
           </div>
-          {!!error && <ErrorText error={error} />}{" "}
+
+          {/* Quick Pick Faculty Pills */}
+          {teachers.length > 0 && (
+            <div
+              style={{
+                margin: "12px 0 18px",
+                display: "flex",
+                gap: "6px",
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "var(--muted)",
+                  fontWeight: 600,
+                }}
+              >
+                Frequent:
+              </span>
+              {teachers.slice(0, 6).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTeacher(t.id)}
+                  style={{
+                    padding: "3px 9px",
+                    borderRadius: "20px",
+                    border:
+                      teacher === t.id
+                        ? "1px solid var(--accent)"
+                        : "1px solid var(--line)",
+                    background:
+                      teacher === t.id ? "var(--accent-soft)" : "var(--paper)",
+                    color: teacher === t.id ? "var(--accent)" : "var(--ink)",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!!error && <ErrorText error={error} />}
           {loading ? (
             <Loading />
           ) : schedule ? (
             <>
-              <h2>{schedule.teacher.name}</h2>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  margin: "16px 0 12px",
+                }}
+              >
+                <h2 style={{ margin: 0 }}>{schedule.teacher.name}</h2>
+                {schedule.day_name && (
+                  <span
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      background: "#f1f5f9",
+                      fontWeight: 600,
+                      fontSize: "13px",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    {schedule.day_name} Schedule
+                  </span>
+                )}
+              </div>
+
+              {/* Next Scheduled Class Card */}
+              {schedule.next_scheduled_class && (
+                <div
+                  style={{
+                    padding: "14px 18px",
+                    background: "var(--accent-soft)",
+                    border: "1px solid var(--accent)",
+                    borderRadius: "8px",
+                    marginBottom: "16px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                  }}
+                >
+                  <div>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        color: "var(--accent)",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Upcoming Session Today
+                    </span>
+                    <h3 style={{ margin: "2px 0 0", fontSize: "16px" }}>
+                      {schedule.next_scheduled_class.subject}
+                    </h3>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700, fontSize: "14px" }}>
+                      {time(schedule.next_scheduled_class.start_time)} –{" "}
+                      {time(schedule.next_scheduled_class.end_time)}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                      <MapPin
+                        size={13}
+                        style={{ display: "inline", verticalAlign: "middle" }}
+                      />{" "}
+                      Room {schedule.next_scheduled_class.room_code || "TBD"}{" "}
+                      {schedule.next_scheduled_class.building
+                        ? `(${schedule.next_scheduled_class.building})`
+                        : ""}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Free Consultation Windows Tags */}
+              {schedule.free_periods && schedule.free_periods.length > 0 && (
+                <div
+                  style={{
+                    margin: "16px 0",
+                    padding: "14px",
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <h4
+                    style={{
+                      margin: "0 0 8px",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: "#166534",
+                    }}
+                  >
+                    Free Consultation Windows (No classes scheduled)
+                  </h4>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {schedule.free_periods.map((fp, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "4px 10px",
+                          borderRadius: "4px",
+                          background: "#fff",
+                          border: "1px solid #86efac",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#166534",
+                        }}
+                      >
+                        <Clock size={13} /> {time(fp.start_time)}–
+                        {time(fp.end_time)} ({fp.duration_minutes} min free)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {schedule.sessions.length ? (
                 <div className="room-list">
                   {schedule.sessions.map((session, index) => (

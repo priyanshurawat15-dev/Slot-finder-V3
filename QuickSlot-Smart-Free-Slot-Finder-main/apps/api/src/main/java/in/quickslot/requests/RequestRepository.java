@@ -18,6 +18,15 @@ public class RequestRepository {
   }
 
   private BookingRequest map(ResultSet row, int index) throws SQLException {
+    String participantGroup = "";
+    String requiredEquipment = "";
+    try {
+      participantGroup = row.getString("participant_group");
+      requiredEquipment = row.getString("required_equipment");
+    } catch (SQLException ignored) {}
+    if (participantGroup == null) participantGroup = "";
+    if (requiredEquipment == null) requiredEquipment = "";
+
     return new BookingRequest(
         row.getString("id"),
         row.getString("requester_id"),
@@ -27,7 +36,9 @@ public class RequestRepository {
         row.getObject("end_time", LocalTime.class),
         row.getString("purpose"),
         row.getInt("attendance"),
-        row.getString("status"));
+        row.getString("status"),
+        participantGroup,
+        requiredEquipment);
   }
 
   public BookingRequest get(String id, boolean lock) {

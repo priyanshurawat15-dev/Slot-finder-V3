@@ -19,6 +19,8 @@ export function Finder() {
   const [building, setBuilding] = useState("");
   const [floor, setFloor] = useState("");
   const [state, setState] = useState("");
+  const [requireProjector, setRequireProjector] = useState(false);
+  const [requireAc, setRequireAc] = useState(false);
   const [data, setData] = useState<Availability | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
@@ -57,10 +59,12 @@ export function Finder() {
           (!building || room.building === building) &&
           (!floor || room.floor === floor) &&
           (!state || room.state === state) &&
+          (!requireProjector || room.has_projector) &&
+          (!requireAc || room.has_ac) &&
           (!capacity ||
             (room.capacity !== null && room.capacity >= Number(capacity))),
       ),
-    [data, kind, building, floor, state, capacity],
+    [data, kind, building, floor, state, capacity, requireProjector, requireAc],
   );
   const buildings = [
     ...new Set(data?.rooms.map((room) => room.building).filter(Boolean) || []),
@@ -127,19 +131,116 @@ export function Finder() {
                 setEnd(until);
               }}
             />
+            {/* Standard Period Presets */}
+            <div>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "var(--muted)",
+                  fontWeight: 600,
+                  display: "block",
+                  marginBottom: "4px",
+                }}
+              >
+                Period presets (Timetable)
+              </span>
+              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                {[
+                  { label: "P1", from: "09:00", to: "10:00" },
+                  { label: "P2", from: "10:00", to: "11:00" },
+                  { label: "P3", from: "11:15", to: "12:15" },
+                  { label: "P4", from: "12:15", to: "13:15" },
+                  { label: "Lab", from: "14:00", to: "16:00" },
+                  { label: "Eve", from: "16:00", to: "18:00" },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => {
+                      setStart(p.from);
+                      setEnd(p.to);
+                    }}
+                    style={{
+                      padding: "3px 7px",
+                      fontSize: "11px",
+                      borderRadius: "4px",
+                      border:
+                        start === p.from && end === p.to
+                          ? "1px solid var(--accent)"
+                          : "1px solid var(--line)",
+                      background:
+                        start === p.from && end === p.to
+                          ? "var(--accent-soft)"
+                          : "var(--paper)",
+                      color:
+                        start === p.from && end === p.to
+                          ? "var(--accent)"
+                          : "var(--ink)",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                    title={`${p.label}: ${p.from} - ${p.to}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label>
-              Room type
+              Venue type
               <SelectField
-                aria-label="Room type"
+                aria-label="Venue type"
                 value={kind}
                 onValueChange={setKind}
                 options={[
-                  { value: "", label: "Classrooms & LTs" },
+                  { value: "", label: "All venue types" },
                   { value: "CLASSROOM", label: "Classroom" },
                   { value: "LT", label: "Lecture theatre" },
+                  { value: "LAB", label: "Computer / AI Lab" },
+                  { value: "SEMINAR_HALL", label: "Seminar Hall" },
+                  { value: "AUDITORIUM", label: "Auditorium" },
                 ]}
               />
             </label>
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                fontSize: "13px",
+                padding: "2px 0",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={requireProjector}
+                  onChange={(e) => setRequireProjector(e.target.checked)}
+                />
+                Projector
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={requireAc}
+                  onChange={(e) => setRequireAc(e.target.checked)}
+                />
+                AC
+              </label>
+            </div>
             <label>
               Minimum seats
               <input
@@ -180,6 +281,7 @@ export function Finder() {
               {[
                 { state: "AVAILABLE", label: "Free" },
                 { state: "OCCUPIED", label: "In use / booked" },
+                { state: "RESTRICTED", label: "Restricted" },
               ].map((item) => (
                 <div
                   className={`summary-card summary-${item.state.toLowerCase()}`}
@@ -236,6 +338,7 @@ export function Finder() {
                   { value: "", label: "All rooms" },
                   { value: "AVAILABLE", label: "Free" },
                   { value: "OCCUPIED", label: "In use / booked" },
+                  { value: "RESTRICTED", label: "Restricted" },
                 ]}
               />
             </label>

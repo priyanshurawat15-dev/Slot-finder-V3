@@ -12,4 +12,19 @@ public record BookingRequest(
     LocalTime endTime,
     String purpose,
     int attendance,
-    String status) {}
+    String status,
+    String participantGroup,
+    String requiredEquipment) {
+  public BookingRequest(
+      String id,
+      String requesterId,
+      String roomId,
+      LocalDate date,
+      LocalTime startTime,
+      LocalTime endTime,
+      String purpose,
+      int attendance,
+      String status) {
+    this(id, requesterId, roomId, date, startTime, endTime, purpose, attendance, status, "", "");
+  }
+}
