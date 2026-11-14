@@ -101,6 +101,13 @@ public class RequestService {
     output.put("status", item.status());
     output.put("participant_group", item.participantGroup() != null ? item.participantGroup() : "");
     output.put("required_equipment", item.requiredEquipment() != null ? item.requiredEquipment() : "");
+    output.put("club_id", item.clubId() != null ? item.clubId() : "");
+    String clubName = "";
+    if (item.clubId() != null && !item.clubId().isBlank()) {
+      var names = jdbc.queryForList("SELECT name FROM clubs WHERE id=?", String.class, item.clubId());
+      if (!names.isEmpty()) clubName = names.get(0);
+    }
+    output.put("club_name", clubName);
     output.put(
         "history",
         jdbc.query(
@@ -206,7 +213,7 @@ public class RequestService {
     if (user.roles().contains("STUDENT") && user.roles().size() == 1)
       throw new ApiException(403, "Students are not permitted to submit room booking requests.");
     boolean hasBookingRole = user.roles().stream()
-        .anyMatch(r -> Set.of("FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD").contains(r));
+        .anyMatch(r -> Set.of("FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD", "ADMIN").contains(r));
     if (!hasBookingRole)
       throw new ApiException(403, "Only faculty, club heads, coordinators, and HODs may request rooms.");
     if (input.purpose().strip().length() < 3)
@@ -228,6 +235,43 @@ public class RequestService {
       throw new ApiException(404, "Room not found.");
     if (room.capacity() != null && input.attendance() > room.capacity())
       throw new ApiException(422, "Attendance exceeds room capacity.");
+
+    // Validate Club Head and Club ID
+    String clubId = input.clubId() != null && !input.clubId().isBlank() ? input.clubId().strip() : null;
+    if (clubId == null && user.roles().contains("CLUB_HEAD")) {
+      var managed = jdbc.queryForList(
+          "SELECT c.id FROM clubs c JOIN club_managers cm ON cm.club_id=c.id WHERE cm.user_id=? AND c.verified=true LIMIT 1",
+          String.class,
+          user.id());
+      if (!managed.isEmpty()) {
+        clubId = managed.get(0);
+      }
+    }
+    if (clubId != null) {
+      var clubRows = jdbc.queryForList("SELECT verified, campus_id FROM clubs WHERE id=?", clubId);
+      if (clubRows.isEmpty()) {
+        throw new ApiException(404, "Club not found.");
+      }
+      var clubRow = clubRows.get(0);
+      if (!user.campusId().equals(clubRow.get("campus_id"))) {
+        throw new ApiException(403, "Club belongs to another campus.");
+      }
+      boolean verified = Boolean.TRUE.equals(clubRow.get("verified"));
+      if (!verified) {
+        throw new ApiException(403, "This club is not verified for room bookings.");
+      }
+      if (!user.hasRole("ADMIN")) {
+        Boolean isManager = jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM club_managers WHERE club_id=? AND user_id=?)",
+            Boolean.class,
+            clubId,
+            user.id());
+        if (!Boolean.TRUE.equals(isManager)) {
+          throw new ApiException(403, "You are not an authorized manager for this club.");
+        }
+      }
+    }
+
     lock.acquire();
     String key = rawKey == null ? null : "submit:" + rawKey;
     String fingerprint = fingerprint(input);
@@ -246,8 +290,8 @@ public class RequestService {
     String reqEquip = input.requiredEquipment() != null ? input.requiredEquipment().strip() : "";
     jdbc.update(
         "INSERT INTO"
-            + " booking_requests(id,requester_id,room_id,date,start_time,end_time,purpose,attendance,participant_group,required_equipment)"
-            + " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            + " booking_requests(id,requester_id,room_id,date,start_time,end_time,purpose,attendance,participant_group,required_equipment,club_id)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         id,
         user.id(),
         room.id(),
@@ -257,7 +301,8 @@ public class RequestService {
         input.purpose().strip(),
         input.attendance(),
         partGroup,
-        reqEquip);
+        reqEquip,
+        clubId);
     event(user, id, "SUBMITTED", "");
     reviewers.forEach(reviewer -> notify(reviewer.id(), id, "New room request for " + room.code()));
     remember(user, key, fingerprint, id);
@@ -284,8 +329,8 @@ public class RequestService {
         throw new ApiException(403, "An independent authorized reviewer must decide this request.");
       if (!Set.of("PENDING", "FORWARDED").contains(item.status()))
         throw new ApiException(409, "Request has already been decided.");
-      if (item.status().equals("FORWARDED") && !user.hasRole("HOD"))
-        throw new ApiException(403, "Forwarded requests require HOD decision.");
+      if (item.status().equals("FORWARDED") && (!user.hasRole("HOD") || !isHodForDepartment(user, room.department())))
+        throw new ApiException(403, "Forwarded requests require HOD decision for the room's department.");
       if (item.status().equals("PENDING") && !isAllocated(user, room))
         throw new ApiException(403, "Normal pending requests must be reviewed by the allocated venue coordinator.");
       if (action.equals("forward") && (!user.hasRole("COORDINATOR") || !isAllocated(user, room)))
@@ -332,18 +377,33 @@ public class RequestService {
           id);
     }
     if (action.equals("forward")) {
-      var hods =
-          jdbc.query(
-              "SELECT * FROM users WHERE active AND campus_id=? AND role='HOD' AND department=? AND id<>?",
-              AuthService::user,
-              room.campusId(),
-              room.department(),
-              item.requesterId());
+      var hods = jdbc.query(
+          "SELECT u.* FROM users u JOIN department_hods dh ON dh.user_id = u.id "
+              + "WHERE u.active AND dh.active AND dh.campus_id=? AND dh.department=? AND u.id<>?",
+          AuthService::user,
+          room.campusId(),
+          room.department(),
+          item.requesterId());
+      if (hods.isEmpty()) {
+        hods = jdbc.query(
+            "SELECT * FROM users WHERE active AND campus_id=? AND role='HOD' AND department=? AND id<>?",
+            AuthService::user,
+            room.campusId(),
+            room.department(),
+            item.requesterId());
+      }
       if (hods.isEmpty()) throw new ApiException(409, "No HOD reviewer is configured.");
       hods.forEach(hod -> notify(hod.id(), id, "Request forwarded for HOD decision: " + reason));
     }
-    if (action.equals("cancel"))
+    if (action.equals("cancel")) {
       jdbc.update("UPDATE occupancies SET active=false WHERE source_id=?", id);
+      var revs = reviewers(room, user.id());
+      revs.forEach(r -> notify(r.id(), id, "Booking cancelled for " + room.code() + ": " + reason));
+    }
+    if (action.equals("withdraw")) {
+      var revs = reviewers(room, user.id());
+      revs.forEach(r -> notify(r.id(), id, "Booking request withdrawn for " + room.code()));
+    }
     String status =
         switch (action) {
           case "approve" -> "APPROVED";

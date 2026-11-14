@@ -84,6 +84,8 @@ export interface BookingRequest {
   history: HistoryEvent[];
   participant_group?: string;
   required_equipment?: string;
+  club_id?: string;
+  club_name?: string;
 }
 
 export interface RequestInput {
@@ -95,6 +97,23 @@ export interface RequestInput {
   attendance: number;
   participant_group?: string;
   required_equipment?: string;
+  club_id?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  request_id: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ManagedClub {
+  id: string;
+  slug: string;
+  name: string;
+  summary: string;
+  verified: boolean;
 }
 
 export interface ScheduleSession {

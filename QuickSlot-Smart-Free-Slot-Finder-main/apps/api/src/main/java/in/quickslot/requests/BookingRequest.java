@@ -14,7 +14,8 @@ public record BookingRequest(
     int attendance,
     String status,
     String participantGroup,
-    String requiredEquipment) {
+    String requiredEquipment,
+    String clubId) {
   public BookingRequest(
       String id,
       String requesterId,
@@ -25,6 +26,21 @@ public record BookingRequest(
       String purpose,
       int attendance,
       String status) {
-    this(id, requesterId, roomId, date, startTime, endTime, purpose, attendance, status, "", "");
+    this(id, requesterId, roomId, date, startTime, endTime, purpose, attendance, status, "", "", null);
+  }
+
+  public BookingRequest(
+      String id,
+      String requesterId,
+      String roomId,
+      LocalDate date,
+      LocalTime startTime,
+      LocalTime endTime,
+      String purpose,
+      int attendance,
+      String status,
+      String participantGroup,
+      String requiredEquipment) {
+    this(id, requesterId, roomId, date, startTime, endTime, purpose, attendance, status, participantGroup, requiredEquipment, null);
   }
 }

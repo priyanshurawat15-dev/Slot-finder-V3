@@ -7,12 +7,15 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { ClashCheckResult, Room } from "../lib/types";
+import type { ClashCheckResult, ManagedClub, Room } from "../lib/types";
 import { campusToday } from "../lib/format";
+import { useAuth } from "../lib/auth";
 import { ErrorText, Notice, PageHeading } from "../components/ui";
 import { HourSlotSelect } from "../components/HourSlotSelect";
 import { SelectField } from "../components/SelectField";
+
 export function RequestForm() {
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -30,6 +33,8 @@ export function RequestForm() {
   const [requiredEquipment, setRequiredEquipment] = useState("");
   const [purpose, setPurpose] = useState("");
   const [attendance, setAttendance] = useState("");
+  const [managedClubs, setManagedClubs] = useState<ManagedClub[]>([]);
+  const [clubId, setClubId] = useState(params.get("club_id") || params.get("clubId") || "");
   const [clashStatus, setClashStatus] = useState<ClashCheckResult | null>(null);
   const [checkingClash, setCheckingClash] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -40,6 +45,12 @@ export function RequestForm() {
   useEffect(() => {
     api.rooms().then(setRooms).catch(setError);
   }, []);
+
+  useEffect(() => {
+    if (user?.role === "CLUB_HEAD" || user?.role === "ADMIN") {
+      api.managedClubs().then(setManagedClubs).catch(() => {});
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!roomId || !date || !start || !end || end <= start) {
@@ -72,6 +83,10 @@ export function RequestForm() {
       setError(new Error("The end time must be after the start time."));
       return;
     }
+    if (user?.role === "CLUB_HEAD" && !clubId) {
+      setError(new Error("Please select your assigned verified club."));
+      return;
+    }
     const payload = {
       room_id: roomId,
       date,
@@ -81,6 +96,7 @@ export function RequestForm() {
       attendance: Number(attendance),
       participant_group: participantGroup.trim() || undefined,
       required_equipment: requiredEquipment.trim() || undefined,
+      club_id: clubId.trim() || undefined,
     };
     const serialized = JSON.stringify(payload);
     if (lastPayload.current && lastPayload.current !== serialized)
@@ -96,6 +112,7 @@ export function RequestForm() {
       setBusy(false);
     }
   };
+
   return (
     <div className="container page narrow-page">
       <Link to="/" className="back-link">
@@ -207,6 +224,33 @@ export function RequestForm() {
         <div className="form-section-title">
           <span>Your plans</span>
         </div>
+
+        {(user?.role === "CLUB_HEAD" || managedClubs.length > 0) && (
+          <label>
+            Verified Club / Society {user?.role === "CLUB_HEAD" ? "(required)" : "(optional)"}
+            <SelectField
+              aria-label="Club"
+              required={user?.role === "CLUB_HEAD"}
+              value={clubId}
+              onValueChange={(val) => {
+                setClubId(val);
+                const c = managedClubs.find((item) => item.id === val);
+                if (c && !participantGroup) setParticipantGroup(c.name);
+              }}
+              options={[
+                {
+                  value: "",
+                  label: user?.role === "CLUB_HEAD" ? "Select your managed club" : "No club association",
+                },
+                ...managedClubs.map((club) => ({
+                  value: club.id,
+                  label: `${club.name}${club.verified ? " (Verified)" : " (Unverified)"}`,
+                })),
+              ]}
+            />
+          </label>
+        )}
+
         <label>
           Club, society or student group
           <input
@@ -250,7 +294,7 @@ export function RequestForm() {
           />
         </label>
         <Notice>
-          Booking hours are 08:00–18:00 IST. The coordinator can approve,
+          Booking hours are 08:00–20:00 IST. The coordinator can approve,
           reject, or forward your request to the HOD. The room is not held while
           a request is pending.
         </Notice>

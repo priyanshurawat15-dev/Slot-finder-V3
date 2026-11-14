@@ -26,6 +26,11 @@ public class ClubController {
     return service.list();
   }
 
+  @GetMapping("/managed")
+  public List<?> managed(HttpServletRequest request) {
+    return service.managedClubs(auth.require(request));
+  }
+
   @GetMapping("/{slug}")
   public Map<String, Object> profile(@PathVariable String slug) {
     return service.profile(slug);

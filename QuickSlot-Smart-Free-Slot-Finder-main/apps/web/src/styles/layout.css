@@ -358,3 +358,110 @@ main {
     line-height: 1.6;
   }
 }
+
+/* In-App Notifications */
+.notification-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.notification-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  padding: 8px;
+  cursor: pointer;
+  color: #fff;
+  transition: background 0.15s, border-color 0.15s;
+}
+.notification-bell:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #e11d48;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 9999px;
+  border: 2px solid #282b2f;
+}
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 330px;
+  max-width: 90vw;
+  background: #23272d;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  color: #edf0f4;
+  overflow: hidden;
+}
+.notification-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.2);
+}
+.notification-dropdown-header button {
+  background: none;
+  border: none;
+  color: #a78bfa;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.notification-dropdown-header button:hover {
+  text-decoration: underline;
+}
+.notification-dropdown-list {
+  max-height: 340px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notification-item {
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 1.45;
+}
+.notification-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.notification-item.unread {
+  background: rgba(91, 25, 209, 0.18);
+  border-left: 3px solid #8b5cf6;
+}
+.notification-item-time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+.notification-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
