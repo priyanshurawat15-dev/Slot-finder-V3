@@ -46,7 +46,7 @@ public class AdminController {
   @GetMapping("/stats")
   public Map<String, Object> adminStats(HttpServletRequest request) {
     AuthenticatedUser user = auth.require(request);
-    if (!Set.of("ADMIN", "COORDINATOR", "HOD").contains(user.role())) {
+    if (!user.hasRole("ADMIN") && !user.hasRole("COORDINATOR") && !user.hasRole("HOD")) {
       throw new ApiException(403, "Administrator permission required.");
     }
 
@@ -81,7 +81,7 @@ public class AdminController {
   @GetMapping("/audit-logs")
   public List<Map<String, Object>> auditLogs(HttpServletRequest request) {
     AuthenticatedUser user = auth.require(request);
-    if (!Set.of("ADMIN", "COORDINATOR").contains(user.role())) {
+    if (!user.hasRole("ADMIN") && !user.hasRole("COORDINATOR")) {
       throw new ApiException(403, "Administrator permission required.");
     }
 

@@ -71,6 +71,7 @@ export function Layout() {
                 )}
                 {user?.role === "ADMIN" && (
                   <>
+                    <NavLink to="/admin/accounts">Accounts</NavLink>
                     <NavLink to="/admin/timetables">Timetables</NavLink>
                     <NavLink to="/admin/rooms">Room register</NavLink>
                   </>

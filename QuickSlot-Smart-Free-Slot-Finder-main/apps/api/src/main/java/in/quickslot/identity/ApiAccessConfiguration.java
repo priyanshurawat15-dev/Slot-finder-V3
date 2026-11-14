@@ -38,6 +38,8 @@ public class ApiAccessConfiguration implements WebMvcConfigurer {
                 boolean publicPost =
                     request.getMethod().equals("POST")
                         && (path.equals("/api/auth/login")
+                            || path.equals("/api/auth/activate")
+                            || path.equals("/api/auth/bootstrap")
                             || path.startsWith("/api/demo"));
                 boolean publicDemo = path.startsWith("/api/demo");
                 if (!publicRead && !publicPost && !publicDemo) auth.require(request);

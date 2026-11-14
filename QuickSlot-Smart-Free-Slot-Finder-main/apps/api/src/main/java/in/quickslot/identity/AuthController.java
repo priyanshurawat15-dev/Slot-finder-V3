@@ -21,6 +21,17 @@ public class AuthController {
   public record Credentials(
       @NotBlank @Size(max = 255) String email, @NotBlank @Size(max = 72) String password) {}
 
+  public record ActivateInput(
+      @NotBlank String token,
+      @NotBlank @Size(min = 8, max = 72) String new_password) {}
+
+  public record BootstrapInput(
+      @NotBlank @Size(max = 255) String full_name,
+      @NotBlank @Size(max = 255) String email,
+      @NotBlank @Size(min = 8, max = 72) String password,
+      String employee_id,
+      String department) {}
+
   @PostMapping("/login")
   public ResponseEntity<?> login(
       @Valid @RequestBody Credentials input, HttpServletRequest request) {
@@ -28,6 +39,22 @@ public class AuthController {
     return ResponseEntity.ok()
         .header(HttpHeaders.SET_COOKIE, result.cookie())
         .body(Map.of("user", result.user(), "csrf_token", result.csrfToken()));
+  }
+
+  @PostMapping("/activate")
+  public ResponseEntity<?> activate(@Valid @RequestBody ActivateInput input) {
+    return ResponseEntity.ok(auth.activateAccount(input.token(), input.new_password()));
+  }
+
+  @PostMapping("/bootstrap")
+  public ResponseEntity<?> bootstrap(@Valid @RequestBody BootstrapInput input) {
+    return ResponseEntity.ok(
+        auth.bootstrapAdmin(
+            input.full_name(),
+            input.email(),
+            input.password(),
+            input.employee_id(),
+            input.department()));
   }
 
   @GetMapping("/me")

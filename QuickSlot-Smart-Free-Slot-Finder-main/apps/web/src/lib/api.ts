@@ -17,6 +17,10 @@ import type {
   DeadlockResult,
   SyncResult,
   ConcurrencyRaceResult,
+  AdminAccount,
+  CreateAccountInput,
+  UpdateAccountInput,
+  DepartmentHod,
 } from "./types";
 let csrfToken = "";
 export class ApiError extends Error {
@@ -217,4 +221,60 @@ export const api = {
       `/demo/concurrency-race?num_competing=${numCompeting}`,
       { method: "POST" },
     ),
+
+  // Account Management & Permissions (Phase 2)
+  adminAccounts: (params?: { query?: string; role?: string; department?: string; status?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.query) searchParams.set("query", params.query);
+    if (params?.role) searchParams.set("role", params.role);
+    if (params?.department) searchParams.set("department", params.department);
+    if (params?.status) searchParams.set("status", params.status);
+    const qs = searchParams.toString();
+    return send<AdminAccount[]>(`/admin/accounts${qs ? `?${qs}` : ""}`);
+  },
+  adminAccount: (id: string) => send<AdminAccount>(`/admin/accounts/${encodeURIComponent(id)}`),
+  createAccount: (data: CreateAccountInput) =>
+    send<{ success: boolean; id: string; invitation_token?: string; activation_url?: string }>(
+      "/admin/accounts",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+  updateAccount: (id: string, data: UpdateAccountInput) =>
+    send<AdminAccount>(`/admin/accounts/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  setAccountStatus: (id: string, status: "ACTIVE" | "DEACTIVATED") =>
+    send<{ success: boolean; status: string; active: boolean; message: string }>(
+      `/admin/accounts/${encodeURIComponent(id)}/status`,
+      {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      },
+    ),
+  updateAllocations: (id: string, room_ids: string[]) =>
+    send<{ success: boolean; user_id: string; allocated_rooms: unknown[] }>(
+      `/admin/accounts/${encodeURIComponent(id)}/allocations`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ room_ids }),
+      },
+    ),
+  listDepartments: () => send<string[]>("/admin/departments"),
+  listDepartmentHods: () => send<DepartmentHod[]>("/admin/departments/hods"),
+  assignHod: (data: { department: string; user_id: string; campus_id?: string }) =>
+    send<{ success: boolean; department: string; user_id: string }>(
+      "/admin/departments/hods",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+  activateAccount: (token: string, new_password: string) =>
+    send<{ success: boolean; message: string; email: string }>("/auth/activate", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
+    }),
 };
