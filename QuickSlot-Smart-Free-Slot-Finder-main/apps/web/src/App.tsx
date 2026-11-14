@@ -23,6 +23,7 @@ import { ClubProfile } from "./pages/ClubProfile";
 import { OsDbmsLab } from "./pages/OsDbmsLab";
 import { AccountManagement } from "./pages/AccountManagement";
 import { ActivateAccount } from "./pages/ActivateAccount";
+import { PilotVerification } from "./pages/PilotVerification";
 function Protected({
   children,
   mode,
@@ -125,6 +126,14 @@ export function App() {
             element={
               <Protected mode="admin">
                 <RoomRegister />
+              </Protected>
+            }
+          />
+          <Route
+            path="admin/pilot"
+            element={
+              <Protected mode="review">
+                <PilotVerification />
               </Protected>
             }
           />

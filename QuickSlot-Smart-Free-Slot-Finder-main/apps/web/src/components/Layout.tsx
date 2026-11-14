@@ -123,7 +123,10 @@ export function Layout() {
                   <NavLink to="/requests">My requests</NavLink>
                 )}
                 {canReview(user?.role) && (
-                  <NavLink to="/approvals">Review requests</NavLink>
+                  <>
+                    <NavLink to="/approvals">Review requests</NavLink>
+                    <NavLink to="/admin/pilot">CSE Pilot</NavLink>
+                  </>
                 )}
                 {user?.role === "ADMIN" && (
                   <>

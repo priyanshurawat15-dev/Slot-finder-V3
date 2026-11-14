@@ -19,10 +19,12 @@ public class RoomRepository {
     boolean hasProjector = true;
     boolean hasAc = true;
     boolean hasAudio = false;
+    boolean verified = false;
     try {
       hasProjector = row.getBoolean("has_projector");
       hasAc = row.getBoolean("has_ac");
       hasAudio = row.getBoolean("has_audio");
+      verified = row.getBoolean("verified");
     } catch (SQLException ignored) {}
 
     return new Room(
@@ -38,12 +40,19 @@ public class RoomRepository {
         row.getString("floor"),
         hasProjector,
         hasAc,
-        hasAudio);
+        hasAudio,
+        verified);
   }
 
   public List<Room> publicRooms() {
     return jdbc.query(
         "SELECT * FROM rooms WHERE active AND campus_id='gehu-hill-dehradun' ORDER BY code",
+        this::map);
+  }
+
+  public List<Room> allRooms() {
+    return jdbc.query(
+        "SELECT * FROM rooms WHERE campus_id='gehu-hill-dehradun' ORDER BY code",
         this::map);
   }
 
