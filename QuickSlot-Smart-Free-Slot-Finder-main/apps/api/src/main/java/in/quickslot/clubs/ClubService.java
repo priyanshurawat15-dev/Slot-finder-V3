@@ -28,6 +28,20 @@ public class ClubService {
         .toList();
   }
 
+  public List<Map<String, Object>> managedClubs(AuthenticatedUser user) {
+    if (user.hasRole("ADMIN")) {
+      return jdbc.queryForList(
+          "SELECT id, slug, name, summary, verified FROM clubs WHERE campus_id=? AND verified=true ORDER BY name",
+          user.campusId());
+    }
+    return jdbc.queryForList(
+        "SELECT c.id, c.slug, c.name, c.summary, c.verified FROM clubs c "
+            + "JOIN club_managers cm ON cm.club_id = c.id "
+            + "WHERE cm.user_id = ? AND c.campus_id = ? ORDER BY c.name",
+        user.id(),
+        user.campusId());
+  }
+
   public Map<String, Object> profile(String slug) {
     var club = find(slug);
     var result = new LinkedHashMap<>(club);

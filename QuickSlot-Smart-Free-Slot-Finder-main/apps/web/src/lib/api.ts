@@ -21,6 +21,8 @@ import type {
   CreateAccountInput,
   UpdateAccountInput,
   DepartmentHod,
+  AppNotification,
+  ManagedClub,
 } from "./types";
 let csrfToken = "";
 export class ApiError extends Error {
@@ -126,6 +128,16 @@ export const api = {
     send<BookingRequest>(`/requests/${id}/${action}`, {
       method: "POST",
       body: JSON.stringify({ reason }),
+    }),
+  managedClubs: () => send<ManagedClub[]>("/clubs/managed"),
+  notifications: () => send<AppNotification[]>("/notifications"),
+  markNotificationRead: (id: string) =>
+    send<{ ok: boolean; id: string }>(`/notifications/${id}/read`, {
+      method: "POST",
+    }),
+  markAllNotificationsRead: () =>
+    send<{ ok: boolean; count: number }>("/notifications/read-all", {
+      method: "POST",
     }),
   versions: () => send<ImportVersion[]>("/timetables"),
   version: (id: string) => send<ImportVersion>(`/timetables/${id}`),

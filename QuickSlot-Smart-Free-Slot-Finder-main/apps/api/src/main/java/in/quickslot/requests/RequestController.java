@@ -1,6 +1,7 @@
 package in.quickslot.requests;
 
 import in.quickslot.identity.AuthService;
+import in.quickslot.shared.ApiException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
@@ -58,16 +59,38 @@ public class RequestController {
     var user = auth.require(request);
     return jdbc.query(
         "SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC",
-        (row, index) ->
-            Map.of(
-                "id",
-                row.getString("id"),
-                "request_id",
-                row.getString("request_id"),
-                "message",
-                row.getString("message"),
-                "created_at",
-                row.getObject("created_at", OffsetDateTime.class)),
+        (row, index) -> {
+          boolean isRead = false;
+          try {
+            isRead = row.getBoolean("is_read");
+          } catch (Exception ignored) {}
+          return Map.of(
+              "id",
+              row.getString("id"),
+              "request_id",
+              row.getString("request_id"),
+              "message",
+              row.getString("message"),
+              "is_read",
+              isRead,
+              "created_at",
+              row.getObject("created_at", OffsetDateTime.class));
+        },
         user.id());
+  }
+
+  @PostMapping("/notifications/{id}/read")
+  public Map<String, ?> markRead(@PathVariable String id, HttpServletRequest request) {
+    var user = auth.require(request);
+    int updated = jdbc.update("UPDATE notifications SET is_read=true WHERE id=? AND user_id=?", id, user.id());
+    if (updated == 0) throw new ApiException(404, "Notification not found.");
+    return Map.of("ok", true, "id", id);
+  }
+
+  @PostMapping("/notifications/read-all")
+  public Map<String, ?> markAllRead(HttpServletRequest request) {
+    var user = auth.require(request);
+    int count = jdbc.update("UPDATE notifications SET is_read=true WHERE user_id=? AND is_read=false", user.id());
+    return Map.of("ok", true, "count", count);
   }
 }

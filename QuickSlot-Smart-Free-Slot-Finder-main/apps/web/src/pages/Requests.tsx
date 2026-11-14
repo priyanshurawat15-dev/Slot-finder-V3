@@ -6,6 +6,8 @@ import {
   ChevronUp,
   Clock3,
   Send,
+  Building,
+  Users,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { BookingRequest } from "../lib/types";
@@ -20,6 +22,7 @@ import {
   PageHeading,
   Status,
 } from "../components/ui";
+
 export function Requests({ review = false }: { review?: boolean }) {
   const { user } = useAuth();
   const [params] = useSearchParams();
@@ -35,6 +38,7 @@ export function Requests({ review = false }: { review?: boolean }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState("");
+
   useEffect(() => {
     api
       .requests()
@@ -42,6 +46,7 @@ export function Requests({ review = false }: { review?: boolean }) {
       .catch(setError)
       .finally(() => setLoading(false));
   }, []);
+
   const act = async () => {
     if (!decision) return;
     if (
@@ -49,7 +54,11 @@ export function Requests({ review = false }: { review?: boolean }) {
       !reason.trim()
     ) {
       setError(
-        new Error("Add a reason so everyone understands this decision."),
+        new Error(
+          decision.action === "forward"
+            ? "Add remarks explaining why this request requires HOD authorization."
+            : "Add a reason so everyone understands this decision.",
+        ),
       );
       return;
     }
@@ -69,20 +78,33 @@ export function Requests({ review = false }: { review?: boolean }) {
       setBusy(false);
     }
   };
+
   const shown = requests.filter(
     (request) => !filter || request.status === filter,
   );
+
+  const getHeadingTitle = () => {
+    if (!review) return "My booking requests.";
+    if (user?.role === "ADMIN") return "Campus booking oversight.";
+    if (user?.role === "HOD") return "Department approvals.";
+    return "Venue coordinator reviews.";
+  };
+
+  const getHeadingText = () => {
+    if (!review)
+      return "Track request status, review decision remarks, or cancel approved reservations.";
+    if (user?.role === "ADMIN")
+      return "Campus-wide room booking monitoring and audit log. Review decisions are delegated to venue coordinators and department heads.";
+    if (user?.role === "HOD")
+      return "Review room requests forwarded for Department Head authorization.";
+    return "Review requests for rooms in your allocation scope. Forward to the HOD when a decision needs their permission.";
+  };
+
   return (
     <div className="container page">
       <PageHeading
-        title={review ? "Review requests." : "My requests."}
-        text={
-          review
-            ? user?.role === "HOD"
-              ? "Review room requests and decisions, including requests forwarded by the coordinator."
-              : "Review requests for rooms in your allocation scope. Forward to the HOD when a decision needs their permission."
-            : "View request status and decisions."
-        }
+        title={getHeadingTitle()}
+        text={getHeadingText()}
         action={
           !review && (
             <Link className="button button-primary" to="/requests/new">
@@ -97,11 +119,24 @@ export function Requests({ review = false }: { review?: boolean }) {
           decision.
         </Notice>
       )}
+      {review && user?.role === "ADMIN" && (
+        <Notice>
+          Administrator Monitoring Mode: All bookings across the campus are
+          visible for schedule coordination. Approval authority remains with
+          the designated venue coordinator and department HOD.
+        </Notice>
+      )}
       {success && <Notice tone="success">{success}</Notice>}
       {!!error && <ErrorText error={error} />}
+
       <div className="request-toolbar">
         <span>
-          {requests.length} {review ? "requests in your scope" : "requests"}
+          {requests.length}{" "}
+          {review
+            ? user?.role === "ADMIN"
+              ? "campus requests"
+              : "requests in your scope"
+            : "requests"}
         </span>
         <label>
           Show
@@ -128,6 +163,7 @@ export function Requests({ review = false }: { review?: boolean }) {
           />
         </label>
       </div>
+
       {loading ? (
         <Loading />
       ) : !shown.length ? (
@@ -141,11 +177,16 @@ export function Requests({ review = false }: { review?: boolean }) {
           {shown.map((request) => {
             const isOpen = expanded === request.id;
             const pending = ["PENDING", "FORWARDED"].includes(request.status);
+            const isOwner = user?.id === request.requester_id;
             const canDecide =
               review &&
               pending &&
-              user?.id !== request.requester_id &&
-              (user?.role === "HOD" ? request.status === "FORWARDED" : request.status === "PENDING");
+              !isOwner &&
+              user?.role !== "ADMIN" &&
+              (user?.role === "HOD"
+                ? request.status === "FORWARDED"
+                : request.status === "PENDING");
+
             return (
               <article className="request-card" key={request.id}>
                 <div className="request-card-top">
@@ -157,9 +198,16 @@ export function Requests({ review = false }: { review?: boolean }) {
                         <Clock3 size={14} />
                         {time(request.start_time)}–{time(request.end_time)}
                       </span>
+                      {request.club_name && (
+                        <span style={{ fontWeight: 600, color: "#a78bfa" }}>
+                          <Building size={14} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />
+                          {request.club_name}
+                        </span>
+                      )}
                     </div>
                     <h2>{request.purpose}</h2>
                     <p>
+                      <Users size={14} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
                       {request.requester_name} · {request.attendance} people
                       {request.participant_group && ` · Group: ${request.participant_group}`}
                       {request.required_equipment && ` · Equipment: ${request.required_equipment}`}
@@ -167,6 +215,7 @@ export function Requests({ review = false }: { review?: boolean }) {
                   </div>
                   <Status value={request.status} />
                 </div>
+
                 <div className="request-card-bottom">
                   <button
                     className="text-link"
@@ -218,7 +267,7 @@ export function Requests({ review = false }: { review?: boolean }) {
                         </button>
                       </>
                     )}
-                    {!review && pending && (
+                    {!review && pending && isOwner && (
                       <button
                         className="button button-outline button-small"
                         onClick={() => {
@@ -229,7 +278,7 @@ export function Requests({ review = false }: { review?: boolean }) {
                         Withdraw
                       </button>
                     )}
-                    {!review && request.status === "APPROVED" && (
+                    {!review && request.status === "APPROVED" && isOwner && (
                       <button
                         className="button button-outline button-small"
                         onClick={() => {
@@ -242,6 +291,7 @@ export function Requests({ review = false }: { review?: boolean }) {
                     )}
                   </div>
                 </div>
+
                 {isOpen && (
                   <ol className="history-list">
                     {request.history.length ? (
@@ -265,6 +315,7 @@ export function Requests({ review = false }: { review?: boolean }) {
                     )}
                   </ol>
                 )}
+
                 {decision?.id === request.id && (
                   <section
                     className="decision-panel"
@@ -272,23 +323,40 @@ export function Requests({ review = false }: { review?: boolean }) {
                   >
                     <h3>
                       {decision.action === "forward"
-                        ? "Forward this request to the HOD"
-                        : `${decision.action[0].toUpperCase()}${decision.action.slice(1)} this request`}
+                        ? "Forward this request to the Department HOD"
+                        : decision.action === "cancel"
+                          ? "Cancel confirmed room reservation"
+                          : `${decision.action[0].toUpperCase()}${decision.action.slice(1)} this request`}
                     </h3>
                     <p>
                       {decision.action === "approve"
-                        ? "Availability and booking conflicts will be checked again before approval."
-                        : "This decision and your reason will appear in the request history."}
+                        ? `Availability and capacity (${request.attendance} attendees for Room ${request.room_code}) will be validated. On approval, the room becomes busy.`
+                        : decision.action === "forward"
+                          ? "Forwarding will alert the Department Head for review and decision."
+                          : decision.action === "cancel"
+                            ? "Cancelling will immediately release room occupancy and notify reviewers."
+                            : "This decision and your reason will be logged in the audit history and sent to the requester."}
                     </p>
                     <label>
-                      Reason{" "}
-                      {decision.action === "approve" ||
-                      decision.action === "withdraw"
-                        ? "(optional)"
-                        : "(required)"}
+                      {decision.action === "forward"
+                        ? "Forwarding remarks (required)"
+                        : decision.action === "cancel"
+                          ? "Cancellation reason (required)"
+                          : decision.action === "reject"
+                            ? "Rejection reason (required)"
+                            : "Decision notes (optional)"}
                       <textarea
                         value={reason}
                         rows={3}
+                        placeholder={
+                          decision.action === "forward"
+                            ? "Specify why HOD authorization is needed (e.g. special event, weekend access)..."
+                            : decision.action === "cancel"
+                              ? "Specify reason for cancellation..."
+                              : decision.action === "reject"
+                                ? "Specify reason for rejection..."
+                                : "Optional remarks..."
+                        }
                         onChange={(e) => setReason(e.target.value)}
                         autoFocus
                       />

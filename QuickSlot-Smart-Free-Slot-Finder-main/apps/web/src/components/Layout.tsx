@@ -1,14 +1,69 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ArrowUpRight, LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { ArrowUpRight, Bell, CheckCheck, LogOut, Menu, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { canRequest, canReview, canViewFaculty, useAuth } from "../lib/auth";
 import { roleName } from "../lib/format";
+import { api } from "../lib/api";
+import type { AppNotification } from "../lib/types";
 
 export function Layout() {
   const { user, logout } = useAuth();
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState("");
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const loadNotifs = () => {
+      api.notifications().then(setNotifications).catch(() => {});
+    };
+    loadNotifs();
+    const interval = setInterval(loadNotifs, 15000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  const markRead = async (id: string, requestId?: string) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      );
+      if (requestId) {
+        setNotifOpen(false);
+        navigate(canReview(user?.role) ? "/approvals" : "/requests");
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    } catch {
+      // ignore
+    }
+  };
+
   const signOut = async () => {
     try {
       await logout();
@@ -17,6 +72,7 @@ export function Layout() {
       setError(failure instanceof Error ? failure.message : "Sign out failed");
     }
   };
+
   return (
     <>
       <a className="skip-link" href="#main">
@@ -78,6 +134,61 @@ export function Layout() {
                 )}
                 {user ? (
                   <div className="user-nav">
+                    <div className="notification-wrapper" ref={notifRef}>
+                      <button
+                        className="notification-bell"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotifOpen(!notifOpen);
+                        }}
+                        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+                        aria-expanded={notifOpen}
+                        type="button"
+                      >
+                        <Bell size={17} />
+                        {unreadCount > 0 && (
+                          <span className="notification-badge">{unreadCount}</span>
+                        )}
+                      </button>
+                      {notifOpen && (
+                        <div
+                          className="notification-dropdown"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="notification-dropdown-header">
+                            <span>Notifications {unreadCount > 0 ? `(${unreadCount} unread)` : ""}</span>
+                            {unreadCount > 0 && (
+                              <button onClick={markAllRead} type="button">
+                                <CheckCheck size={14} style={{ marginRight: "3px" }} />
+                                Mark all read
+                              </button>
+                            )}
+                          </div>
+                          <ul className="notification-dropdown-list">
+                            {notifications.length === 0 ? (
+                              <li className="notification-empty">No notifications</li>
+                            ) : (
+                              notifications.map((n) => (
+                                <li
+                                  key={n.id}
+                                  className={`notification-item ${n.is_read ? "" : "unread"}`}
+                                  onClick={() => markRead(n.id, n.request_id)}
+                                >
+                                  <div>{n.message}</div>
+                                  <div className="notification-item-time">
+                                    {new Date(n.created_at).toLocaleString("en-IN", {
+                                      timeZone: "Asia/Kolkata",
+                                      dateStyle: "short",
+                                      timeStyle: "short",
+                                    })}
+                                  </div>
+                                </li>
+                              ))
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                     <span>
                       {user.full_name}
                       <small>{roleName(user.role)}</small>
