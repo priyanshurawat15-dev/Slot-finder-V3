@@ -12,7 +12,6 @@ interface AuthContext {
   loading: boolean;
   login(email: string, password: string): Promise<void>;
   logout(): Promise<void>;
-  switchRole(role: string): Promise<void>;
 }
 const Auth = createContext<AuthContext | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -38,12 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       else throw error;
     }
   };
-  const switchRole = async (role: string) => {
-    const result = await api.switchDemoRole(role);
-    setUser(result.user);
-  };
   return (
-    <Auth.Provider value={{ user, loading, login, logout, switchRole }}>
+    <Auth.Provider value={{ user, loading, login, logout }}>
       {children}
     </Auth.Provider>
   );
@@ -57,9 +52,7 @@ export function canReview(role?: string) {
   return ["COORDINATOR", "ALLOCATION_FACULTY", "HOD", "ADMIN"].includes(role || "");
 }
 export function canRequest(role?: string) {
-  return ["STUDENT", "FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD", "ADMIN"].includes(
-    role || "",
-  );
+  return ["FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD"].includes(role || "");
 }
 export function canViewFaculty(role?: string) {
   return Boolean(role);

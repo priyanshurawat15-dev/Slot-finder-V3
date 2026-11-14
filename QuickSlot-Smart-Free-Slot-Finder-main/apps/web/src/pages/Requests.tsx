@@ -144,7 +144,8 @@ export function Requests({ review = false }: { review?: boolean }) {
             const canDecide =
               review &&
               pending &&
-              (user?.role === "HOD" || request.status === "PENDING");
+              user?.id !== request.requester_id &&
+              (user?.role === "HOD" ? request.status === "FORWARDED" : request.status === "PENDING");
             return (
               <article className="request-card" key={request.id}>
                 <div className="request-card-top">

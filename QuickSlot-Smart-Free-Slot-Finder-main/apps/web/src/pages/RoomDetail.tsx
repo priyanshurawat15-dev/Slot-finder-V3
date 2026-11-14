@@ -67,7 +67,7 @@ export function RoomDetail() {
                 </span>
               </p>
             </div>
-            {(!user || canRequest(user.role)) && (
+            {canRequest(user?.role) && (
               <Link className="button button-primary" to={requestUrl}>
                 Request this room <ArrowUpRight size={18} />
               </Link>

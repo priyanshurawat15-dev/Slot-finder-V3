@@ -34,15 +34,10 @@ public class ApiAccessConfiguration implements WebMvcConfigurer {
                             || path.matches("/api/clubs/[^/]+")
                             || path.equals("/api/availability")
                             || path.equals("/api/availability/check-clash")
-                            || path.matches("/api/rooms/[^/]+/schedule")
-                            || path.equals("/api/admin/overview-summary")
-                            || path.equals("/api/auth/users")
-                            || path.equals("/api/timetables/teachers")
-                            || path.matches("/api/timetables/teachers/[^/]+/schedule"));
+                            || path.matches("/api/rooms/[^/]+/schedule"));
                 boolean publicPost =
                     request.getMethod().equals("POST")
                         && (path.equals("/api/auth/login")
-                            || path.equals("/api/auth/switch-demo-role")
                             || path.startsWith("/api/demo"));
                 boolean publicDemo = path.startsWith("/api/demo");
                 if (!publicRead && !publicPost && !publicDemo) auth.require(request);

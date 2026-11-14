@@ -71,6 +71,7 @@ export interface HistoryEvent {
 
 export interface BookingRequest {
   id: string;
+  requester_id: string;
   room_id: string;
   room_code: string;
   date: string;

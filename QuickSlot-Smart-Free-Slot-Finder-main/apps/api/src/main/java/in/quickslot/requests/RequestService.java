@@ -40,17 +40,22 @@ public class RequestService {
     this.json = json;
   }
 
-  public boolean canDecide(AuthenticatedUser user, Room room) {
-    if (!user.campusId().equals(room.campusId())) return false;
-    if (user.role().equals("ADMIN")) return true;
-    if (user.role().equals("HOD")) return user.department().equals(room.department());
-    if (!user.role().equals("COORDINATOR")) return false;
+  public boolean isAllocated(AuthenticatedUser user, Room room) {
     return Boolean.TRUE.equals(
         jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM allocations WHERE user_id=? AND room_id=?)",
             Boolean.class,
             user.id(),
             room.id()));
+  }
+
+  public boolean canDecide(AuthenticatedUser user, Room room) {
+    if (!user.campusId().equals(room.campusId())) return false;
+    if (user.role().equals("HOD")) return user.department().equals(room.department());
+    if (user.role().equals("COORDINATOR") || user.role().equals("ADMIN")) {
+      return isAllocated(user, room);
+    }
+    return false;
   }
 
   public List<Map<String, ?>> list(AuthenticatedUser user) {
@@ -103,15 +108,22 @@ public class RequestService {
   }
 
   private List<AuthenticatedUser> reviewers(Room room, String except) {
-    return jdbc
+    var allocated = jdbc
         .query(
             "SELECT * FROM users WHERE active AND campus_id=? AND id<>?",
             AuthService::user,
             room.campusId(),
             except)
         .stream()
-        .filter(user -> canDecide(user, room))
+        .filter(user -> isAllocated(user, room))
         .toList();
+    if (!allocated.isEmpty()) return allocated;
+    return jdbc.query(
+        "SELECT * FROM users WHERE active AND campus_id=? AND role='HOD' AND department=? AND id<>?",
+        AuthService::user,
+        room.campusId(),
+        room.department(),
+        except);
   }
 
   private String fingerprint(Object value) {
@@ -168,8 +180,10 @@ public class RequestService {
 
   @Transactional
   public Map<String, ?> submit(AuthenticatedUser user, RequestInput input, String rawKey) {
-    if (!Set.of("STUDENT", "FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD", "ADMIN").contains(user.role()))
-      throw new ApiException(403, "Only students, faculty and club heads may request rooms.");
+    if (user.role().equals("STUDENT"))
+      throw new ApiException(403, "Students are not permitted to submit room booking requests.");
+    if (!Set.of("FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD").contains(user.role()))
+      throw new ApiException(403, "Only faculty, club heads, coordinators, and HODs may request rooms.");
     if (input.purpose().strip().length() < 3)
       throw new ApiException(422, "Describe the purpose in at least three characters.");
     AvailabilityService.validateWindow(input.startTime(), input.endTime());
@@ -247,7 +261,9 @@ public class RequestService {
         throw new ApiException(409, "Request has already been decided.");
       if (item.status().equals("FORWARDED") && !user.role().equals("HOD"))
         throw new ApiException(403, "Forwarded requests require HOD decision.");
-      if (action.equals("forward") && !user.role().equals("COORDINATOR"))
+      if (item.status().equals("PENDING") && !isAllocated(user, room))
+        throw new ApiException(403, "Normal pending requests must be reviewed by the allocated venue coordinator.");
+      if (action.equals("forward") && (!user.role().equals("COORDINATOR") || !isAllocated(user, room)))
         throw new ApiException(403, "Only the responsible coordinator may forward.");
       if (Set.of("reject", "forward").contains(action) && reason.isBlank())
         throw new ApiException(422, "Provide a reason.");
@@ -274,8 +290,12 @@ public class RequestService {
           .isAfter(ZonedDateTime.now(AvailabilityService.INDIA)))
         throw new ApiException(409, "Requested time has passed.");
       String state = availability.state(room.id(), item.date(), item.startTime(), item.endTime());
-      if (state.equals("OCCUPIED"))
-        throw new ApiException(409, "The room is already occupied or booked during this time window.");
+      if (!state.equals("AVAILABLE"))
+        throw new ApiException(
+            409,
+            state.equals("UNKNOWN")
+                ? "Timetable coverage is incomplete."
+                : "The room is occupied or booked during this time window.");
       jdbc.update(
           "INSERT INTO occupancies(id,room_id,starts_at,ends_at,kind,source_id) VALUES"
               + " (?,?,?,?,?,?)",
@@ -288,9 +308,12 @@ public class RequestService {
     }
     if (action.equals("forward")) {
       var hods =
-          reviewers(room, item.requesterId()).stream()
-              .filter(reviewer -> reviewer.role().equals("HOD"))
-              .toList();
+          jdbc.query(
+              "SELECT * FROM users WHERE active AND campus_id=? AND role='HOD' AND department=? AND id<>?",
+              AuthService::user,
+              room.campusId(),
+              room.department(),
+              item.requesterId());
       if (hods.isEmpty()) throw new ApiException(409, "No HOD reviewer is configured.");
       hods.forEach(hod -> notify(hod.id(), id, "Request forwarded for HOD decision: " + reason));
     }
