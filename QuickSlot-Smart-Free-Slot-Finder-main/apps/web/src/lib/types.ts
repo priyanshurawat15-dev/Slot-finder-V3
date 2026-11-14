@@ -286,3 +286,52 @@ export interface ConcurrencyRaceResult {
   is_safe: boolean;
   verification_message: string;
 }
+
+export interface AdminAccount {
+  id: string;
+  full_name: string;
+  email: string;
+  employee_id: string;
+  role: string;
+  roles: string[];
+  campus_id: string;
+  department: string;
+  active: boolean;
+  status: 'ACTIVE' | 'INVITED' | 'DEACTIVATED';
+  invited_at?: string;
+  activated_at?: string;
+  created_at: string;
+  allocated_rooms?: { id: string; code: string; kind?: string; building?: string; assigned_at?: string }[];
+  is_hod?: boolean;
+}
+
+export interface CreateAccountInput {
+  full_name: string;
+  email: string;
+  employee_id?: string;
+  department?: string;
+  role: string;
+  roles?: string[];
+  room_ids?: string[];
+  send_invitation?: boolean;
+  temporary_password?: string;
+}
+
+export interface UpdateAccountInput {
+  full_name?: string;
+  employee_id?: string;
+  department?: string;
+  role?: string;
+  roles?: string[];
+}
+
+export interface DepartmentHod {
+  id: string;
+  department: string;
+  campus_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  employee_id: string;
+  assigned_at: string;
+}

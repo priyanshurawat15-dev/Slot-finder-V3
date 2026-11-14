@@ -21,6 +21,8 @@ import { RoomRegister } from "./pages/RoomRegister";
 import { Clubs } from "./pages/Clubs";
 import { ClubProfile } from "./pages/ClubProfile";
 import { OsDbmsLab } from "./pages/OsDbmsLab";
+import { AccountManagement } from "./pages/AccountManagement";
+import { ActivateAccount } from "./pages/ActivateAccount";
 function Protected({
   children,
   mode,
@@ -76,6 +78,7 @@ export function App() {
           <Route path="clubs" element={<Clubs />} />
           <Route path="clubs/:slug" element={<ClubProfile />} />
           <Route path="lab" element={<OsDbmsLab />} />
+          <Route path="activate" element={<ActivateAccount />} />
           <Route path="login" element={<Login />} />
           <Route
             path="requests/new"
@@ -98,6 +101,14 @@ export function App() {
             element={
               <Protected mode="review">
                 <Requests review />
+              </Protected>
+            }
+          />
+          <Route
+            path="admin/accounts"
+            element={
+              <Protected mode="admin">
+                <AccountManagement />
               </Protected>
             }
           />

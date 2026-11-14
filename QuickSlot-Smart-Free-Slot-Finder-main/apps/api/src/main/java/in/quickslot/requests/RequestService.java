@@ -49,10 +49,23 @@ public class RequestService {
             room.id()));
   }
 
+  public boolean isHodForDepartment(AuthenticatedUser user, String department) {
+    if (department == null) return false;
+    Boolean exists =
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM department_hods WHERE user_id=? AND department=? AND campus_id=? AND active=true)",
+            Boolean.class,
+            user.id(),
+            department,
+            user.campusId());
+    if (Boolean.TRUE.equals(exists)) return true;
+    return user.hasRole("HOD") && department.equalsIgnoreCase(user.department());
+  }
+
   public boolean canDecide(AuthenticatedUser user, Room room) {
     if (!user.campusId().equals(room.campusId())) return false;
-    if (user.role().equals("HOD")) return user.department().equals(room.department());
-    if (user.role().equals("COORDINATOR") || user.role().equals("ADMIN")) {
+    if (user.hasRole("HOD")) return isHodForDepartment(user, room.department());
+    if (user.hasRole("COORDINATOR") || user.hasRole("ADMIN")) {
       return isAllocated(user, room);
     }
     return false;
@@ -64,7 +77,7 @@ public class RequestService {
             item ->
                 item.requesterId().equals(user.id())
                     || canDecide(user, rooms.get(item.roomId()))
-                    || (user.role().equals("ADMIN")
+                    || (user.hasRole("ADMIN")
                         && user.campusId().equals(rooms.get(item.roomId()).campusId())))
         .map(this::view)
         .toList();
@@ -118,6 +131,16 @@ public class RequestService {
         .filter(user -> isAllocated(user, room))
         .toList();
     if (!allocated.isEmpty()) return allocated;
+
+    var deptHods = jdbc.query(
+        "SELECT u.* FROM users u JOIN department_hods dh ON dh.user_id = u.id "
+            + "WHERE u.active AND dh.active AND dh.campus_id=? AND dh.department=? AND u.id<>?",
+        AuthService::user,
+        room.campusId(),
+        room.department(),
+        except);
+    if (!deptHods.isEmpty()) return deptHods;
+
     return jdbc.query(
         "SELECT * FROM users WHERE active AND campus_id=? AND role='HOD' AND department=? AND id<>?",
         AuthService::user,
@@ -180,9 +203,11 @@ public class RequestService {
 
   @Transactional
   public Map<String, ?> submit(AuthenticatedUser user, RequestInput input, String rawKey) {
-    if (user.role().equals("STUDENT"))
+    if (user.roles().contains("STUDENT") && user.roles().size() == 1)
       throw new ApiException(403, "Students are not permitted to submit room booking requests.");
-    if (!Set.of("FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD").contains(user.role()))
+    boolean hasBookingRole = user.roles().stream()
+        .anyMatch(r -> Set.of("FACULTY", "CLUB_HEAD", "COORDINATOR", "HOD").contains(r));
+    if (!hasBookingRole)
       throw new ApiException(403, "Only faculty, club heads, coordinators, and HODs may request rooms.");
     if (input.purpose().strip().length() < 3)
       throw new ApiException(422, "Describe the purpose in at least three characters.");
@@ -259,11 +284,11 @@ public class RequestService {
         throw new ApiException(403, "An independent authorized reviewer must decide this request.");
       if (!Set.of("PENDING", "FORWARDED").contains(item.status()))
         throw new ApiException(409, "Request has already been decided.");
-      if (item.status().equals("FORWARDED") && !user.role().equals("HOD"))
+      if (item.status().equals("FORWARDED") && !user.hasRole("HOD"))
         throw new ApiException(403, "Forwarded requests require HOD decision.");
       if (item.status().equals("PENDING") && !isAllocated(user, room))
         throw new ApiException(403, "Normal pending requests must be reviewed by the allocated venue coordinator.");
-      if (action.equals("forward") && (!user.role().equals("COORDINATOR") || !isAllocated(user, room)))
+      if (action.equals("forward") && (!user.hasRole("COORDINATOR") || !isAllocated(user, room)))
         throw new ApiException(403, "Only the responsible coordinator may forward.");
       if (Set.of("reject", "forward").contains(action) && reason.isBlank())
         throw new ApiException(422, "Provide a reason.");
