@@ -83,6 +83,17 @@ public class RequestService {
         .toList();
   }
 
+  public Map<String, ?> get(AuthenticatedUser user, String id) {
+    BookingRequest item = requests.get(id, false);
+    Room room = rooms.get(item.roomId());
+    if (!item.requesterId().equals(user.id())
+        && !canDecide(user, room)
+        && !(user.hasRole("ADMIN") && user.campusId().equals(room.campusId()))) {
+      throw new ApiException(403, "You do not have permission to view this request.");
+    }
+    return view(item);
+  }
+
   public Map<String, ?> view(BookingRequest item) {
     var output = new LinkedHashMap<String, Object>();
     output.put("id", item.id());
@@ -235,6 +246,19 @@ public class RequestService {
       throw new ApiException(404, "Room not found.");
     if (room.capacity() != null && input.attendance() > room.capacity())
       throw new ApiException(422, "Attendance exceeds room capacity.");
+
+    OffsetDateTime reqStart = input.date().atTime(input.startTime()).atZone(AvailabilityService.INDIA).toOffsetDateTime();
+    OffsetDateTime reqEnd = input.date().atTime(input.endTime()).atZone(AvailabilityService.INDIA).toOffsetDateTime();
+    var activeClosures = jdbc.queryForList(
+        "SELECT reason FROM room_closures WHERE room_id=? AND active=true "
+            + "AND starts_at < ? AND (ends_at IS NULL OR ends_at > ?) LIMIT 1",
+        room.id(),
+        reqEnd,
+        reqStart);
+    if (!activeClosures.isEmpty()) {
+      String reason = (String) activeClosures.get(0).get("reason");
+      throw new ApiException(409, "The room is closed during this time window: " + reason);
+    }
 
     // Validate Club Head and Club ID
     String clubId = input.clubId() != null && !input.clubId().isBlank() ? input.clubId().strip() : null;

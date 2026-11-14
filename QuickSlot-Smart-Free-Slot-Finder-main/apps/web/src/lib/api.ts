@@ -23,6 +23,11 @@ import type {
   DepartmentHod,
   AppNotification,
   ManagedClub,
+  RoomClosure,
+  ClosureInput,
+  RoomVerificationInput,
+  FacultyMapping,
+  PilotVerificationReport,
 } from "./types";
 let csrfToken = "";
 export class ApiError extends Error {
@@ -288,5 +293,34 @@ export const api = {
     send<{ success: boolean; message: string; email: string }>("/auth/activate", {
       method: "POST",
       body: JSON.stringify({ token, new_password }),
+    }),
+
+  // Phase 4: CSE Pilot Data, Room Closures & Faculty Mappings
+  allRooms: () => send<Room[]>("/rooms?all=true"),
+  roomClosures: (roomId: string) => send<RoomClosure[]>(`/rooms/${encodeURIComponent(roomId)}/closures`),
+  createClosure: (roomId: string, data: ClosureInput) =>
+    send<RoomClosure>(`/rooms/${encodeURIComponent(roomId)}/closures`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  liftClosure: (roomId: string, closureId: string) =>
+    send<{ message: string }>(`/rooms/${encodeURIComponent(roomId)}/closures/${encodeURIComponent(closureId)}`, {
+      method: "DELETE",
+    }),
+  updateRoomVerification: (roomId: string, data: RoomVerificationInput) =>
+    send<Room>(`/rooms/${encodeURIComponent(roomId)}/verification`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  pilotVerificationReport: () => send<PilotVerificationReport>("/admin/pilot/verification"),
+  listFacultyMappings: (status?: string) =>
+    send<FacultyMapping[]>(`/admin/pilot/faculty-mappings${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  updateFacultyMapping: (
+    timetableFacultyId: string,
+    data: { user_id?: string | null; status: string; notes?: string },
+  ) =>
+    send<FacultyMapping>(`/admin/pilot/faculty-mappings/${encodeURIComponent(timetableFacultyId)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 };

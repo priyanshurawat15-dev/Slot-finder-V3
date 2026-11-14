@@ -32,6 +32,8 @@ export interface Room {
   has_projector?: boolean;
   has_ac?: boolean;
   has_audio?: boolean;
+  verified?: boolean;
+  active?: boolean;
 }
 
 export interface BusyInterval {
@@ -354,3 +356,78 @@ export interface DepartmentHod {
   employee_id: string;
   assigned_at: string;
 }
+
+export interface RoomClosure {
+  id: string;
+  room_id: string;
+  closure_type: "TEMPORARY" | "PERMANENT";
+  reason: string;
+  starts_at: string;
+  ends_at: string | null;
+  created_by: string;
+  created_by_name?: string;
+  created_at: string;
+  active: boolean;
+}
+
+export interface ClosureInput {
+  closure_type: "TEMPORARY" | "PERMANENT";
+  reason: string;
+  starts_at?: string;
+  ends_at?: string;
+}
+
+export interface RoomVerificationInput {
+  verified?: boolean;
+  capacity?: number;
+  building?: string;
+  floor?: string;
+  has_projector?: boolean;
+  has_ac?: boolean;
+  has_audio?: boolean;
+}
+
+export interface FacultyMapping {
+  timetable_faculty_id: string;
+  faculty_name: string;
+  user_id: string | null;
+  user_name: string | null;
+  user_email: string | null;
+  status: "MAPPED" | "UNMAPPED" | "AMBIGUOUS";
+  notes: string;
+  mapped_at: string | null;
+  mapped_by_name: string | null;
+}
+
+export interface PilotVerificationReport {
+  room_summary: {
+    total_rooms: number;
+    verified_rooms: number;
+    unverified_rooms: number;
+    closed_rooms: number;
+    by_kind: Record<string, number>;
+  };
+  faculty_summary: {
+    total_timetable_faculty: number;
+    mapped_count: number;
+    unmapped_count: number;
+    ambiguous_count: number;
+  };
+  timetable_summary: {
+    total_revisions: number;
+    published_revisions: number;
+    total_sessions: number;
+    sessions_in_verified_rooms: number;
+    sessions_in_unverified_rooms: number;
+    sessions_with_unmapped_faculty: number;
+    conflicts_count: number;
+  };
+  issues: Array<{
+    type: string;
+    severity: "ERROR" | "WARNING" | "INFO";
+    entity_id: string;
+    message: string;
+  }>;
+  ready_for_pilot: boolean;
+}
+

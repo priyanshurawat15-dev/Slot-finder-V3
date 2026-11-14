@@ -30,6 +30,11 @@ public class RequestController {
     return service.list(auth.require(request));
   }
 
+  @GetMapping("/requests/{id}")
+  public Map<String, ?> get(@PathVariable String id, HttpServletRequest request) {
+    return service.get(auth.require(request), id);
+  }
+
   @PostMapping("/requests")
   @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
   public Map<String, ?> submit(
