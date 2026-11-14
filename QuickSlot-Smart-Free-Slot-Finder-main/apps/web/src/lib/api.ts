@@ -17,7 +17,6 @@ import type {
   DeadlockResult,
   SyncResult,
   ConcurrencyRaceResult,
-  User,
 } from "./types";
 let csrfToken = "";
 export class ApiError extends Error {
@@ -186,13 +185,6 @@ export const api = {
     send<TeacherScheduleResult>(
       `/timetables/teachers/${encodeURIComponent(id)}/schedule?date=${date}`,
     ),
-
-  // Demo Auth & Role Switching
-  switchDemoRole: (role: string) =>
-    session(`/auth/switch-demo-role?role=${encodeURIComponent(role)}`, {
-      method: "POST",
-    }),
-  demoUsers: () => send<User[]>("/auth/users"),
 
   // Availability & Clash Check
   checkClash: (roomId: string, date: string, startTime: string, endTime: string) =>

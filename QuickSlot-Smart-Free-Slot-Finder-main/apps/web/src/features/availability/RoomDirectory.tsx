@@ -2,6 +2,7 @@ import { ArrowUpRight, Monitor, Wind, Volume2, CalendarPlus } from "lucide-react
 import { Link } from "react-router-dom";
 import { Status } from "../../components/ui";
 import type { Availability } from "../../lib/types";
+import { canRequest, useAuth } from "../../lib/auth";
 
 interface RoomDirectoryProps {
   rooms: Availability["rooms"];
@@ -48,6 +49,7 @@ function formatAbbr(kind: string) {
 }
 
 export function RoomDirectory({ rooms, date, start, end }: RoomDirectoryProps) {
+  const { user } = useAuth();
   return (
     <div className="room-card-grid">
       {rooms.map((room) => (
@@ -164,19 +166,25 @@ export function RoomDirectory({ rooms, date, start, end }: RoomDirectoryProps) {
             }}
           >
             {room.state === "AVAILABLE" ? (
-              <Link
-                to={`/requests/new?roomId=${encodeURIComponent(room.id)}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`}
-                className="button button-primary button-small"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "12px",
-                  padding: "4px 10px",
-                }}
-              >
-                <CalendarPlus size={14} /> Book slot
-              </Link>
+              canRequest(user?.role) ? (
+                <Link
+                  to={`/requests/new?roomId=${encodeURIComponent(room.id)}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`}
+                  className="button button-primary button-small"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "12px",
+                    padding: "4px 10px",
+                  }}
+                >
+                  <CalendarPlus size={14} /> Book slot
+                </Link>
+              ) : (
+                <span style={{ fontSize: "12px", color: "var(--success)", fontWeight: 600 }}>
+                  Available slot
+                </span>
+              )
             ) : (
               <span style={{ fontSize: "12px", color: "var(--muted)" }}>
                 {room.state === "OCCUPIED" ? "In use / reserved" : "Restricted venue"}

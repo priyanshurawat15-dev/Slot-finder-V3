@@ -25,7 +25,8 @@ public class AdminController {
   public record AllocationInput(String userId, String roomId) {}
 
   @GetMapping("/overview-summary")
-  public Map<String, Object> overviewSummary() {
+  public Map<String, Object> overviewSummary(HttpServletRequest request) {
+    auth.admin(request);
     Integer totalVenues = jdbc.queryForObject("SELECT count(*) FROM rooms WHERE active", Integer.class);
     Integer pendingRequests = jdbc.queryForObject("SELECT count(*) FROM booking_requests WHERE status='PENDING'", Integer.class);
     Integer confirmedBookings = jdbc.queryForObject("SELECT count(*) FROM occupancies WHERE active AND kind='BOOKING'", Integer.class);

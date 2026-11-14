@@ -8,8 +8,10 @@ import { Empty, ErrorText, Loading, Notice } from "../components/ui";
 import { RoomDirectory } from "../features/availability/RoomDirectory";
 import { HourSlotSelect } from "../components/HourSlotSelect";
 import { SelectField } from "../components/SelectField";
+import { canRequest, useAuth } from "../lib/auth";
 
 export function Finder() {
+  const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [date, setDate] = useState(params.get("date") || campusToday());
   const [start, setStart] = useState(params.get("start_time") || "10:00");
@@ -100,9 +102,11 @@ export function Finder() {
           <h1>Room availability</h1>
           <p>Find classrooms and lecture theatres at Hill Dehradun.</p>
         </div>
-        <Link className="button button-outline" to="/requests/new">
-          Request a room <ArrowUpRight size={16} />
-        </Link>
+        {canRequest(user?.role) && (
+          <Link className="button button-outline" to="/requests/new">
+            Request a room <ArrowUpRight size={16} />
+          </Link>
+        )}
       </div>
       <div className="availability-workspace">
         <aside className="search-aside" aria-labelledby="search-title">

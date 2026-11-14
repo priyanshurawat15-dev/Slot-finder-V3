@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
@@ -173,39 +174,16 @@ public class AuthService {
         .toString();
   }
 
-  public LoginResult switchDemoRole(String roleName, HttpServletRequest request) {
-    String normalizedRole = roleName.toUpperCase(java.util.Locale.ROOT).trim();
-    if ("ALLOCATION_FACULTY".equals(normalizedRole)) normalizedRole = "COORDINATOR";
-
-    var rows = jdbc.query("SELECT * FROM users WHERE role=? AND active LIMIT 1", AuthService::user, normalizedRole);
-    if (rows.isEmpty()) {
-      throw new ApiException(404, "No active user found with role: " + roleName);
-    }
-    var user = rows.get(0);
-    String token = token();
-    String csrf = token();
-    jdbc.update("DELETE FROM login_sessions WHERE token_hash=?", hash(cookieValue(request)));
-    jdbc.update(
-        "INSERT INTO login_sessions(token_hash,user_id,csrf_token,expires_at) VALUES (?,?,?,?)",
-        hash(token),
-        user.id(),
-        csrf,
-        OffsetDateTime.now().plusHours(12));
-
-    return new LoginResult(
-        user,
-        csrf,
-        ResponseCookie.from(COOKIE, token)
-            .httpOnly(true)
-            .secure(secure)
-            .sameSite("Lax")
-            .path("/api")
-            .maxAge(43200)
-            .build()
-            .toString());
-  }
-
-  public List<AuthenticatedUser> demoUsers() {
-    return jdbc.query("SELECT * FROM users WHERE active ORDER BY role", AuthService::user);
+  public List<Map<String, Object>> activeUsers() {
+    return jdbc.query(
+        "SELECT id, full_name, email, role, campus_id, department FROM users WHERE active ORDER BY role, full_name",
+        (rs, idx) ->
+            Map.of(
+                "id", rs.getString("id"),
+                "full_name", rs.getString("full_name"),
+                "email", rs.getString("email"),
+                "role", rs.getString("role"),
+                "campus_id", rs.getString("campus_id"),
+                "department", rs.getString("department")));
   }
 }

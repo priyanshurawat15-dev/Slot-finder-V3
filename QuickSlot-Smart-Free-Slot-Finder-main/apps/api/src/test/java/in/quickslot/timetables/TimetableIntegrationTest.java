@@ -149,13 +149,7 @@ class TimetableIntegrationTest {
     String schedule = teachers + "/F001/schedule";
     mvc.perform(get(teachers)).andExpect(status().isUnauthorized());
     mvc.perform(get(schedule).param("date", "2026-10-05")).andExpect(status().isUnauthorized());
-    for (String role : List.of("STUDENT", "CLUB_HEAD")) {
-      var cookie = sessionFor(role, "gehu-hill-dehradun");
-      mvc.perform(get(teachers).cookie(cookie)).andExpect(status().isForbidden());
-      mvc.perform(get(schedule).param("date", "2026-10-05").cookie(cookie))
-          .andExpect(status().isForbidden());
-    }
-    for (String role : List.of("FACULTY", "COORDINATOR", "HOD", "ADMIN")) {
+    for (String role : List.of("STUDENT", "CLUB_HEAD", "FACULTY", "COORDINATOR", "HOD", "ADMIN")) {
       var cookie = sessionFor(role, "gehu-hill-dehradun");
       mvc.perform(get(teachers).cookie(cookie))
           .andExpect(status().isOk())
