@@ -77,3 +77,41 @@ Integration tests use isolated schemas; do not configure university databases fo
 ## Before university deployment
 
 Configure approved account provisioning and club-head verification, confirm room inventory and complete timetable coverage, agree calendar/cancellation rules, and test backup restoration. Import extraction currently runs within the upload request with size/page limits; it is not yet a durable background job. Notifications are in-app only. Writes use one database advisory lock initially; measure contention before narrowing lock scope. Accounts currently have one role each. No email delivery, password reset or college SSO is integrated.
+
+
+
+
+
+
+
+
+
+
+
+Terminal 1 — Backend (Spring Boot)
+cd "C:\Users\priya\OneDrive\Desktop\5th sem\PBL OS+DBMS\quick slot - version V3\QuickSlot-Smart-Free-Slot-Finder-main\apps\api"
+
+$env:DATABASE_URL = "jdbc:postgresql://127.0.0.1:5433/quickslot"
+$env:DATABASE_USER = "quickslot"
+$env:DATABASE_PASSWORD = "quickslot"
+$env:PORT = "8081"
+$env:COOKIE_SECURE = "false"
+$env:SPRING_PROFILES_ACTIVE = "demo"
+$env:DEMO_SEED = "true"
+
+.\mvnw.cmd spring-boot:run
+
+
+
+
+
+Terminal 2 — Frontend (React + Vite)
+cd "C:\Users\priya\OneDrive\Desktop\5th sem\PBL OS+DBMS\quick slot - version V3\QuickSlot-Smart-Free-Slot-Finder-main\apps\web"
+
+npm run dev
+
+
+
+
+Terminal 3 — PostgreSQL (only if database service is stopped)
+Start-Service postgresql-x64-18
