@@ -130,3 +130,36 @@ ON CONFLICT (timetable_faculty_id) DO UPDATE SET
 UPDATE faculty_account_mappings
 SET status = 'AMBIGUOUS', notes = 'Multiple faculty matches with surname Chauhan in CSE directory'
 WHERE timetable_faculty_id IN ('fac-akash-chauhan', 'fac-rahul-chauhan');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
