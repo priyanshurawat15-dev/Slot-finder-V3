@@ -44,3 +44,5 @@ public record BookingRequest(
     this(id, requesterId, roomId, date, startTime, endTime, purpose, attendance, status, participantGroup, requiredEquipment, null);
   }
 }
+
+

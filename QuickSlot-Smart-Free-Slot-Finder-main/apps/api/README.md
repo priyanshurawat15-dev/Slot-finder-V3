@@ -38,3 +38,13 @@ See the root README for startup and frontend commands and docs/learning/spring-b
 Club profiles and leadership are public; application lists and membership status require login. Only same-campus students can apply. Assigned club heads or same-campus administrators review requests; club_managers is maintained through controlled administration. The demo seed assigns its local club-head account to Co-Dev only in the demo profile. Membership verification does not change users.role or grant booking permission. Decisions lock membership rows and record audit events.
 
 Co-Dev content is sourced from the supplied Aarambh 4.0 frontend data/organizers.js, pages/AboutPage.js and common/Footer.js. No real organizing-committee member is automatically given a login or reviewer permission.
+
+
+
+Account	Email	Password	Role	Status
+Administrator	admin@demo.quickslot.test	QuickSlot-demo-2026!	ADMIN
+Student	student@demo.quickslot.test	QuickSlot-demo-2026!	STUDENT
+Faculty	faculty@demo.quickslot.test	QuickSlot-demo-2026!	FACULTY
+Coordinator	coordinator@demo.quickslot.test	QuickSlot-demo-2026!	COORDINATOR
+HOD	hod@demo.quickslot.test	QuickSlot-demo-2026!
+Club Head	club@demo.quickslot.test	QuickSlot-demo-2026!	CLUB_HEAD
