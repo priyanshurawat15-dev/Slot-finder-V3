@@ -35,6 +35,7 @@ CREATE TABLE club_memberships (
     reviewed_by varchar(36) REFERENCES users(id),
     reason varchar(500) NOT NULL DEFAULT '',
     UNIQUE(club_id,student_id)
+    
 );
 CREATE INDEX club_membership_review ON club_memberships(club_id,status,created_at);
 
@@ -64,3 +65,4 @@ INSERT INTO club_leadership(club_id,position,name,role) VALUES
 ('codev',15,'Sandeep','Advisor'),
 ('codev',16,'Mr. Sushant Chamoli','Faculty Mentor');
 
+ 
