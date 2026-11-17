@@ -120,7 +120,6 @@ class ClubIntegrationTest {
     return json.readTree(response.getResponse().getContentAsString()).get("id").asText();
   }
 
-
   private void decide(Login reviewer, String id, String action, String reason, int expected)
       throws Exception {
     mvc.perform(
