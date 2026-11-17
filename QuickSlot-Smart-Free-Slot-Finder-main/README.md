@@ -115,7 +115,5 @@ npm run dev
 
 
 
-
-
 Terminal 3 — PostgreSQL (only if database service is stopped)
 Start-Service postgresql-x64-18
