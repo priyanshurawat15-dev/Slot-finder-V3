@@ -9,6 +9,7 @@ final class TimeColumns {
 
   private TimeColumns() {}
 
+
   static List<int[]> parse(List<String> headers, boolean allowTwelveHour) {
     List<int[]> result = new ArrayList<>();
     int previous = 0;

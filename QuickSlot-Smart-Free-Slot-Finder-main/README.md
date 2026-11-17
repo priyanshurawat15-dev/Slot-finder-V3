@@ -105,10 +105,14 @@ $env:DEMO_SEED = "true"
 
 
 
+
+
 Terminal 2 — Frontend (React + Vite)
 cd "C:\Users\priya\OneDrive\Desktop\5th sem\PBL OS+DBMS\quick slot - version V3\QuickSlot-Smart-Free-Slot-Finder-main\apps\web"
 
 npm run dev
+
+
 
 
 
