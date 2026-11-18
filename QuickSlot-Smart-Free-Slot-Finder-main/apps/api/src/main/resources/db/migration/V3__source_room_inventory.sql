@@ -10,3 +10,4 @@ CREATE TABLE room_sources (
     printed_label varchar(80) NOT NULL,
     PRIMARY KEY (room_id, sha256)
 );
+
