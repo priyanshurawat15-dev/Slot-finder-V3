@@ -43,7 +43,7 @@ export interface BusyInterval {
 }
 
 export interface AvailableRoom extends Room {
-  state: "AVAILABLE" | "OCCUPIED" | "RESTRICTED" | "UNKNOWN";
+  state: "AVAILABLE" | "OCCUPIED" | "CLOSED" | "UNKNOWN";
   reason: string;
   busy_intervals: BusyInterval[];
 }

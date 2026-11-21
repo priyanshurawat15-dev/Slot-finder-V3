@@ -285,7 +285,8 @@ export function Finder() {
               {[
                 { state: "AVAILABLE", label: "Free" },
                 { state: "OCCUPIED", label: "In use / booked" },
-                { state: "RESTRICTED", label: "Restricted" },
+                { state: "CLOSED", label: "Closed" },
+                { state: "UNKNOWN", label: "Unverified" },
               ].map((item) => (
                 <div
                   className={`summary-card summary-${item.state.toLowerCase()}`}
@@ -342,7 +343,8 @@ export function Finder() {
                   { value: "", label: "All rooms" },
                   { value: "AVAILABLE", label: "Free" },
                   { value: "OCCUPIED", label: "In use / booked" },
-                  { value: "RESTRICTED", label: "Restricted" },
+                  { value: "CLOSED", label: "Closed" },
+                  { value: "UNKNOWN", label: "Unverified" },
                 ]}
               />
             </label>

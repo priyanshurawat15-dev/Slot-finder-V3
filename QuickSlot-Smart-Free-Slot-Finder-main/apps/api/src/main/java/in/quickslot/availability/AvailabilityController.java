@@ -37,7 +37,7 @@ public class AvailabilityController {
     LocalTime endTime = end != null ? end : LocalTime.of(10, 0);
     AvailabilityService.validateWindow(startTime, endTime);
 
-    var filteredRooms = rooms.publicRooms().stream().filter(r -> {
+    var filteredRooms = rooms.allRooms().stream().filter(r -> {
       if (kind != null && !kind.isBlank() && !r.kind().equalsIgnoreCase(kind.trim())) return false;
       if (building != null && !building.isBlank() && !r.building().equalsIgnoreCase(building.trim())) return false;
       if (floor != null && !floor.isBlank() && (r.floor() == null || !r.floor().equalsIgnoreCase(floor.trim()))) return false;
@@ -66,7 +66,7 @@ public class AvailabilityController {
     AvailabilityService.validateWindow(start, end);
     var room = rooms.get(roomId);
     String state = availability.state(room.id(), date, start, end);
-    boolean hasClash = state.equals("OCCUPIED");
+    boolean hasClash = state.equals("OCCUPIED") || state.equals("CLOSED");
     var busyIntervals = availability.busy(room.id(), date);
 
     return Map.of(
@@ -78,6 +78,9 @@ public class AvailabilityController {
         "state", state,
         "has_clash", hasClash,
         "reason", switch (state) {
+          case "CLOSED" -> availability.activeClosureReason(room.id(), date, start, end)
+              .map(r -> "Room is closed during this time window: " + r)
+              .orElse("Room is closed during this time window.");
           case "OCCUPIED" -> "Selected time slot clashes with an existing class or confirmed booking.";
           case "AVAILABLE" -> "Room is verified free from timetable classes and bookings.";
           default -> "Room availability is unverified for this period.";

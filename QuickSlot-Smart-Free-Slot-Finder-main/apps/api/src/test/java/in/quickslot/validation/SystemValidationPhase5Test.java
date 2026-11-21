@@ -618,7 +618,7 @@ class SystemValidationPhase5Test {
                 .param("start_time", "13:00")
                 .param("end_time", "14:00"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.rooms[?(@.code=='CR 104')].state").value("OCCUPIED"));
+        .andExpect(jsonPath("$.rooms[?(@.code=='CR 104')].state").value("CLOSED"));
 
     // 3. Submitting booking during closure window returns 409
     mvc.perform(

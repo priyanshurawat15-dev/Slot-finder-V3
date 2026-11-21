@@ -49,11 +49,42 @@ public class AvailabilityService {
     return intervals;
   }
 
+  public Optional<String> activeClosureReason(String roomId, LocalDate date, LocalTime start, LocalTime end) {
+    OffsetDateTime reqStart = date.atTime(start).atZone(INDIA).toOffsetDateTime();
+    OffsetDateTime reqEnd = date.atTime(end).atZone(INDIA).toOffsetDateTime();
+    var list = jdbc.query(
+        "SELECT reason, closure_type FROM room_closures WHERE room_id=? AND active=true "
+            + "AND (closure_type='PERMANENT' OR (starts_at < ? AND ends_at > ?)) "
+            + "ORDER BY CASE WHEN closure_type='PERMANENT' THEN 1 ELSE 2 END, created_at DESC LIMIT 1",
+        (rs, rowNum) -> {
+          String reason = rs.getString("reason");
+          if (reason != null && !reason.isBlank()) {
+            return reason.strip();
+          }
+          String type = rs.getString("closure_type");
+          return "PERMANENT".equalsIgnoreCase(type) ? "Room is permanently closed." : "Room is temporarily closed.";
+        },
+        roomId, reqEnd, reqStart);
+    if (!list.isEmpty()) {
+      return Optional.of(list.get(0));
+    }
+    var activeList = jdbc.query(
+        "SELECT active FROM rooms WHERE id=?", (rs, rowNum) -> rs.getBoolean("active"), roomId);
+    if (!activeList.isEmpty() && Boolean.FALSE.equals(activeList.get(0))) {
+      return Optional.of("Room is permanently closed or inactive.");
+    }
+    return Optional.empty();
+  }
+
   public String state(String roomId, LocalDate date, LocalTime start, LocalTime end) {
+    if (activeClosureReason(roomId, date, start, end).isPresent()) {
+      return "CLOSED";
+    }
     if (busy(roomId, date).stream()
         .anyMatch(
             i ->
-                LocalTime.parse(i.startTime()).isBefore(end)
+                !"CLOSURE".equalsIgnoreCase(i.kind())
+                    && LocalTime.parse(i.startTime()).isBefore(end)
                     && LocalTime.parse(i.endTime()).isAfter(start))) {
       return "OCCUPIED";
     }
@@ -63,15 +94,35 @@ public class AvailabilityService {
 
   public Map<String, ?> room(Room room, LocalDate date, LocalTime start, LocalTime end) {
     var output = new LinkedHashMap<String, Object>(RoomController.publicView(room));
-    String state = state(room.id(), date, start, end);
+    var closureReason = activeClosureReason(room.id(), date, start, end);
+    String state;
+    String reason;
+    if (closureReason.isPresent()) {
+      state = "CLOSED";
+      reason = "Room closed: " + closureReason.get();
+    } else {
+      boolean occupied = busy(room.id(), date).stream()
+          .anyMatch(
+              i ->
+                  !"CLOSURE".equalsIgnoreCase(i.kind())
+                      && LocalTime.parse(i.startTime()).isBefore(end)
+                      && LocalTime.parse(i.endTime()).isAfter(start));
+      if (occupied) {
+        state = "OCCUPIED";
+        reason = "A scheduled class or confirmed booking overlaps this time.";
+      } else {
+        var lookup = timetables.getIfAvailable();
+        if (lookup != null && lookup.covered(room.id(), date)) {
+          state = "AVAILABLE";
+          reason = "No scheduled use found. Confirm the room is empty when you arrive.";
+        } else {
+          state = "UNKNOWN";
+          reason = "All course timetables for this room have not yet been verified.";
+        }
+      }
+    }
     output.put("state", state);
-    output.put(
-        "reason",
-        switch (state) {
-          case "OCCUPIED" -> "A scheduled class, booking or closure overlaps this time.";
-          case "AVAILABLE" -> "No scheduled use found. Confirm the room is empty when you arrive.";
-          default -> "All course timetables for this room have not yet been verified.";
-        });
+    output.put("reason", reason);
     output.put("busy_intervals", busy(room.id(), date));
     return output;
   }
