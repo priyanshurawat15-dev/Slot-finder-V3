@@ -373,6 +373,7 @@ public class RequestService {
       if (reason.isBlank()) throw new ApiException(422, "Provide a cancellation reason.");
     }
 
+    boolean isUnknownOverride = false;
     if (action.equals("approve")) {
       if (room.capacity() == null)
         throw new ApiException(409, "Room capacity must be verified before approval.");
@@ -383,13 +384,33 @@ public class RequestService {
           .atZone(AvailabilityService.INDIA)
           .isAfter(ZonedDateTime.now(AvailabilityService.INDIA)))
         throw new ApiException(409, "Requested time has passed.");
+
+      var closureCount =
+          jdbc.queryForObject(
+              "SELECT count(*) FROM room_closures WHERE room_id=? AND active=true AND "
+                  + "(closure_type='PERMANENT' OR (starts_at < ? AND ends_at > ?))",
+              Long.class,
+              room.id(),
+              item.date().atTime(item.endTime()).atZone(AvailabilityService.INDIA).toOffsetDateTime(),
+              item.date().atTime(item.startTime()).atZone(AvailabilityService.INDIA).toOffsetDateTime());
+      if (closureCount != null && closureCount > 0) {
+        throw new ApiException(409, "The room has an active closure during this time window.");
+      }
+
       String state = availability.state(room.id(), item.date(), item.startTime(), item.endTime());
-      if (!state.equals("AVAILABLE"))
-        throw new ApiException(
-            409,
-            state.equals("UNKNOWN")
-                ? "Timetable coverage is incomplete."
-                : "The room is occupied or booked during this time window.");
+      if (state.equals("OCCUPIED")) {
+        throw new ApiException(409, "The room is occupied or booked during this time window.");
+      }
+      if (state.equals("UNKNOWN")) {
+        if (reason == null || reason.isBlank()) {
+          throw new ApiException(
+              422,
+              "Timetable coverage for Room "
+                  + room.code()
+                  + " is unverified (UNKNOWN). Manual verification requires an explanatory note confirming the room was verified in person.");
+        }
+        isUnknownOverride = true;
+      }
       jdbc.update(
           "INSERT INTO occupancies(id,room_id,starts_at,ends_at,kind,source_id) VALUES"
               + " (?,?,?,?,?,?)",
@@ -437,7 +458,22 @@ public class RequestService {
           default -> "CANCELLED";
         };
     jdbc.update("UPDATE booking_requests SET status=? WHERE id=?", status, id);
-    event(user, id, status, reason);
+    if (action.equals("approve") && isUnknownOverride) {
+      jdbc.update(
+          "INSERT INTO decisions(id,request_id,actor_id,action,reason) VALUES (?,?,?,?,?)",
+          UUID.randomUUID().toString(),
+          id,
+          user.id(),
+          "approve",
+          "[Manual verification override]: " + reason);
+      audit.record(
+          user,
+          "REQUEST_APPROVED_UNKNOWN_OVERRIDE",
+          id,
+          Map.of("reason", reason, "state", "UNKNOWN", "room_code", room.code()));
+    } else {
+      event(user, id, status, reason);
+    }
     notify(
         item.requesterId(),
         id,
