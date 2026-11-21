@@ -16,11 +16,13 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -333,6 +335,11 @@ public class TimetableService implements TimetableLookup {
       } catch (IllegalArgumentException error) {
         throw new ApiException(422, "Session times must be HH:MM with start before end");
       }
+      LocalTime start = LocalTime.parse(entry.startTime());
+      LocalTime end = LocalTime.parse(entry.endTime());
+      if (start.isBefore(LocalTime.of(8, 0)) || end.isAfter(LocalTime.of(20, 0))) {
+        throw new ApiException(422, "Sessions must fall within campus operating hours (08:00 to 20:00)");
+      }
       if (entry.subject() == null
           || entry.subject().isBlank()
           || entry.subject().length() > 100
@@ -346,11 +353,51 @@ public class TimetableService implements TimetableLookup {
     }
     if (!rooms.containsAll(coverage))
       throw new ApiException(422, "Coverage contains unknown or inactive rooms");
-    for (int i = 0; i < sessions.size(); i++)
-      for (int j = i + 1; j < sessions.size(); j++)
-        if (overlaps(sessions.get(i), sessions.get(j)))
+    for (int i = 0; i < sessions.size(); i++) {
+      for (int j = i + 1; j < sessions.size(); j++) {
+        var a = sessions.get(i);
+        var b = sessions.get(j);
+        if (a.roomId().equals(b.roomId())
+            && a.weekday() == b.weekday()
+            && a.startTime().equals(b.startTime())
+            && a.endTime().equals(b.endTime())
+            && a.subject().equalsIgnoreCase(b.subject())) {
+          throw new ApiException(
+              422,
+              "Duplicate timetable session found for room "
+                  + a.roomId()
+                  + " on day "
+                  + a.weekday()
+                  + " at "
+                  + a.startTime());
+        }
+        if (overlaps(a, b))
           throw new ApiException(
               422, "Sessions overlap in one room; explicitly consolidate shared classes");
+        if (a.weekday() == b.weekday()
+            && a.startTime().compareTo(b.endTime()) < 0
+            && b.startTime().compareTo(a.endTime()) < 0) {
+          for (String facId : a.facultyIds()) {
+            if (b.facultyIds().contains(facId)) {
+              throw new ApiException(
+                  422,
+                  "Faculty member '"
+                      + facId
+                      + "' is scheduled for overlapping classes on weekday "
+                      + a.weekday()
+                      + " between "
+                      + a.startTime()
+                      + "-"
+                      + a.endTime()
+                      + " and "
+                      + b.startTime()
+                      + "-"
+                      + b.endTime());
+            }
+          }
+        }
+      }
+    }
   }
 
   private static boolean overlaps(Session left, Session right) {
@@ -447,37 +494,89 @@ public class TimetableService implements TimetableLookup {
         LocalDate first =
             from.plusDays(Math.floorMod(entry.weekday() - (from.getDayOfWeek().getValue() - 1), 7));
         if (first.isAfter(until)) continue;
-        if (other.sessions().stream().anyMatch(candidate -> overlaps(entry, candidate)))
-          throw new ApiException(409, "Timetable conflicts with another published scope");
+        for (var candidate : other.sessions()) {
+          if (overlaps(entry, candidate)) {
+            String roomCode = entry.roomId();
+            var roomCodes = jdbc.queryForList("SELECT code FROM rooms WHERE id=?", String.class, entry.roomId());
+            if (!roomCodes.isEmpty()) roomCode = roomCodes.get(0);
+            throw new ApiException(
+                409,
+                "Timetable conflicts with another published scope ('"
+                    + other.scopeKey()
+                    + "') for Room "
+                    + roomCode
+                    + " on weekday "
+                    + entry.weekday()
+                    + " ("
+                    + entry.startTime()
+                    + "-"
+                    + entry.endTime()
+                    + "): '"
+                    + entry.subject()
+                    + "' conflicts with '"
+                    + candidate.subject()
+                    + "'");
+          }
+        }
       }
     }
     for (var entry : revision.sessions()) {
       var occupied =
           jdbc.query(
-              "SELECT starts_at,ends_at FROM occupancies WHERE room_id=? AND active AND starts_at<?"
+              "SELECT starts_at, ends_at, kind, source_id FROM occupancies WHERE room_id=? AND active AND starts_at<?"
                   + " AND ends_at>?",
               (row, number) ->
-                  List.of(
-                      row.getObject("starts_at", OffsetDateTime.class).atZoneSameInstant(INDIA),
-                      row.getObject("ends_at", OffsetDateTime.class).atZoneSameInstant(INDIA)),
+                  Map.of(
+                      "starts_at", row.getObject("starts_at", OffsetDateTime.class).atZoneSameInstant(INDIA),
+                      "ends_at", row.getObject("ends_at", OffsetDateTime.class).atZoneSameInstant(INDIA),
+                      "kind", row.getString("kind") != null ? row.getString("kind") : "OCCUPANCY",
+                      "source_id", row.getString("source_id") != null ? row.getString("source_id") : ""),
               entry.roomId(),
               revision.validUntil().plusDays(1).atStartOfDay(INDIA).toOffsetDateTime(),
               revision.validFrom().atStartOfDay(INDIA).toOffsetDateTime());
       for (var interval : occupied) {
+        var startOffset = (ZonedDateTime) interval.get("starts_at");
+        var endOffset = (ZonedDateTime) interval.get("ends_at");
         LocalDate day =
-            interval.get(0).toLocalDate().isAfter(revision.validFrom())
-                ? interval.get(0).toLocalDate()
+            startOffset.toLocalDate().isAfter(revision.validFrom())
+                ? startOffset.toLocalDate()
                 : revision.validFrom();
         LocalDate last =
-            interval.get(1).toLocalDate().isBefore(revision.validUntil())
-                ? interval.get(1).toLocalDate()
+            endOffset.toLocalDate().isBefore(revision.validUntil())
+                ? endOffset.toLocalDate()
                 : revision.validUntil();
         for (; !day.isAfter(last); day = day.plusDays(1)) {
           if (day.getDayOfWeek().getValue() - 1 != entry.weekday()) continue;
           var start = day.atTime(LocalTime.parse(entry.startTime())).atZone(INDIA);
           var end = day.atTime(LocalTime.parse(entry.endTime())).atZone(INDIA);
-          if (start.isBefore(interval.get(1)) && interval.get(0).isBefore(end))
-            throw new ApiException(409, "Timetable conflicts with an approved booking or closure");
+          if (start.isBefore(endOffset) && startOffset.isBefore(end)) {
+            String roomCode = entry.roomId();
+            var roomCodes = jdbc.queryForList("SELECT code FROM rooms WHERE id=?", String.class, entry.roomId());
+            if (!roomCodes.isEmpty()) roomCode = roomCodes.get(0);
+            String kind = (String) interval.get("kind");
+            String sourceId = (String) interval.get("source_id");
+            String detail = "";
+            if ("BOOKING".equalsIgnoreCase(kind) && !sourceId.isBlank()) {
+              var purposes = jdbc.queryForList("SELECT purpose FROM booking_requests WHERE id=?", String.class, sourceId);
+              if (!purposes.isEmpty()) detail = " ('" + purposes.get(0) + "')";
+            } else if ("CLOSURE".equalsIgnoreCase(kind) && !sourceId.isBlank()) {
+              var reasons = jdbc.queryForList("SELECT reason FROM room_closures WHERE id=?", String.class, sourceId);
+              if (!reasons.isEmpty()) detail = " ('" + reasons.get(0) + "')";
+            }
+            throw new ApiException(
+                409,
+                "Timetable conflicts with an approved "
+                    + kind.toLowerCase(Locale.ROOT)
+                    + detail
+                    + " for Room "
+                    + roomCode
+                    + " on "
+                    + day
+                    + " between "
+                    + entry.startTime()
+                    + " and "
+                    + entry.endTime());
+          }
         }
       }
     }

@@ -2,7 +2,7 @@
 
 Room availability and allocation for Graphic Era Hill University, Dehradun.
 
-Java 21, Spring Boot 3.5, PostgreSQL, React and TypeScript. The backend was rebuilt from scratch; the previous implementation is retained in Git history before codex/02-clean-foundation.
+Java 17 or newer, Spring Boot 3.5, PostgreSQL, React and TypeScript. The backend was rebuilt from scratch; the previous implementation is retained in Git history before codex/02-clean-foundation.
 
 ## What works
 
@@ -20,7 +20,7 @@ The supplied timetable sources cover CSE only. Unknown coverage remains visible;
 
 ## Run locally
 
-Install a JDK 21 or newer and PostgreSQL 17. Enable the btree_gist extension or use a database owner permitted to create it during the initial migration. The Maven wrapper downloads the build tool on first use.
+Install a JDK 17 or newer and PostgreSQL 17 or 18. Enable the btree_gist extension or use a database owner permitted to create it during the initial migration. The Maven wrapper downloads the build tool on first use.
 
 From apps/api in PowerShell:
 
@@ -29,11 +29,10 @@ $env:DATABASE_URL='jdbc:postgresql://127.0.0.1:5432/quickslot'
 $env:DATABASE_USER='quickslot'
 $env:DATABASE_PASSWORD='your-local-database-password'
 $env:COOKIE_SECURE='false'
-$env:PORT='8081'
 .\mvnw.cmd spring-boot:run
 ```
 
-The API defaults to port 8000. The web development proxy defaults to 8081 to avoid another application using 8000 on this workspace. Set PORT=8081 for the backend, or set API_PROXY_TARGET=http://127.0.0.1:8000 when starting Vite. API routes use /api. Flyway applies migrations on startup.
+The API defaults to port 8081 matching Vite's dev proxy. Set PORT to override if needed. API routes use /api. Flyway applies migrations on startup.
 
 For local role accounts, additionally set SPRING_PROFILES_ACTIVE=demo and DEMO_SEED=true before startup. Credentials are documented in apps/api/README.md. Room identities come from the two supplied CSE PDFs, with source hashes recorded. Their 12 CR/LT labels retain leading zeroes. Buildings and capacities remain unverified; the seed does not publish timetable coverage. Production does not seed accounts.
 
