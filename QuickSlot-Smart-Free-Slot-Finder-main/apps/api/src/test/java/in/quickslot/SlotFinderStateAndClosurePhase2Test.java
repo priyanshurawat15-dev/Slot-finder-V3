@@ -1,7 +1,7 @@
 package in.quickslot;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -616,6 +616,643 @@ public class SlotFinderStateAndClosurePhase2Test {
         .andExpect(jsonPath("$.state").value("UNKNOWN"))
         .andExpect(jsonPath("$.has_clash").value(false))
         .andExpect(jsonPath("$.reason").value(containsString("unverified")));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // WP-4: End-to-End Filter Combinations & Edge-Case Tests
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  private void seedFilterCatalog() {
+    jdbc.execute("TRUNCATE rooms, allocations, room_closures, occupancies CASCADE");
+    jdbc.update(
+        "INSERT INTO rooms(id,code,kind,building,floor,capacity,campus_id,department,active,verified,has_projector,has_ac) VALUES "
+            + "('room-cr1','CR 101','CLASSROOM','Aryabhata Block','1st Floor',60,'gehu-hill-dehradun','CS',true,true,true,true),"
+            + "('room-cr2','CR 201','CLASSROOM','Aryabhata Block','2nd Floor',30,'gehu-hill-dehradun','CS',true,true,false,false),"
+            + "('room-lt1','LT 1','LT','Chanakya Block','Ground Floor',120,'gehu-hill-dehradun','CS',true,true,true,true),"
+            + "('room-lab1','LAB 1','LAB','Aryabhata Block','1st Floor',40,'gehu-hill-dehradun','CS',true,true,true,false),"
+            + "('room-aud1','AUD 1','AUDITORIUM','Kautilya Block','Basement',500,'gehu-hill-dehradun','CS',true,true,true,true),"
+            + "('room-sem1','SH 1','SEMINAR_HALL','Chanakya Block','3rd Floor',80,'gehu-hill-dehradun','CS',true,true,false,true),"
+            + "('room-nocap','CR 301','CLASSROOM','Aryabhata Block','3rd Floor',NULL,'gehu-hill-dehradun','CS',true,false,false,false),"
+            + "('room-nofloor','CR 401','CLASSROOM','Aryabhata Block',NULL,50,'gehu-hill-dehradun','CS',true,true,true,true),"
+            + "('room-inactive','CR 102','CLASSROOM','Aryabhata Block','1st Floor',60,'gehu-hill-dehradun','CS',false,true,true,true)");
+  }
+
+  // --- Section A: Individual Filters ---
+
+  @Test
+  void filterByKindIndependentlyReturnsMatchingRooms() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // 1. LT only
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "LT"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-lt1"));
+
+    // 2. LAB only
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "LAB"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-lab1"));
+
+    // 3. SEMINAR_HALL only
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "SEMINAR_HALL"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-sem1"));
+
+    // 4. AUDITORIUM only
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "AUDITORIUM"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-aud1"));
+
+    // 5. CLASSROOM only
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(5)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-cr2", "room-nocap", "room-nofloor", "room-inactive")));
+  }
+
+  @Test
+  void filterByBuildingIndependentlyReturnsMatchingRooms() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // 1. Chanakya Block
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("building", "Chanakya Block"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(jsonPath("$.rooms[*].id", containsInAnyOrder("room-lt1", "room-sem1")));
+
+    // 2. Kautilya Block
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("building", "Kautilya Block"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-aud1"));
+
+    // 3. Aryabhata Block
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("building", "Aryabhata Block"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(6)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-cr2", "room-lab1", "room-nocap", "room-nofloor", "room-inactive")));
+  }
+
+  @Test
+  void filterByFloorIndependentlyReturnsMatchingRooms() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // 1. Ground Floor
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("floor", "Ground Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-lt1"));
+
+    // 2. 2nd Floor
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("floor", "2nd Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-cr2"));
+
+    // 3. 1st Floor (excludes room-nofloor where floor is null)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("floor", "1st Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(3)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder("room-cr1", "room-lab1", "room-inactive")));
+  }
+
+  @Test
+  void filterByMinCapacityReturnsRoomsMeetingThreshold() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // 1. min_capacity=100 (excludes null, 30, 40, 50, 60, 80)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("min_capacity", "100"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(jsonPath("$.rooms[*].id", containsInAnyOrder("room-lt1", "room-aud1")));
+
+    // 2. min_capacity=60 (includes exact 60, 80, 120, 500)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("min_capacity", "60"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(5)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-inactive", "room-sem1", "room-lt1", "room-aud1")));
+  }
+
+  @Test
+  void filterByHasProjectorReturnsEquippedRoomsOnly() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("has_projector", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(6)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-lt1", "room-lab1", "room-aud1", "room-nofloor", "room-inactive")));
+  }
+
+  @Test
+  void filterByHasAcReturnsEquippedRoomsOnly() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("has_ac", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(6)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-lt1", "room-aud1", "room-sem1", "room-nofloor", "room-inactive")));
+  }
+
+  // --- Section B: Combined Filters ---
+
+  @Test
+  void filterByKindAndBuilding() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM")
+                .param("building", "Aryabhata Block"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(5)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-cr2", "room-nocap", "room-nofloor", "room-inactive")));
+  }
+
+  @Test
+  void filterByBuildingAndFloor() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("building", "Aryabhata Block")
+                .param("floor", "1st Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(3)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder("room-cr1", "room-lab1", "room-inactive")));
+  }
+
+  @Test
+  void filterByKindAndMinCapacity() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM")
+                .param("min_capacity", "55"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(
+            jsonPath("$.rooms[*].id", containsInAnyOrder("room-cr1", "room-inactive")));
+  }
+
+  @Test
+  void filterByProjectorAndAc() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("has_projector", "true")
+                .param("has_ac", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(5)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1", "room-lt1", "room-aud1", "room-nofloor", "room-inactive")));
+  }
+
+  @Test
+  void filterByBuildingFloorAndCapacity() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("building", "Aryabhata Block")
+                .param("floor", "1st Floor")
+                .param("min_capacity", "50"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(
+            jsonPath("$.rooms[*].id", containsInAnyOrder("room-cr1", "room-inactive")));
+  }
+
+  @Test
+  void filterByAllSupportedCriteriaTogether() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM")
+                .param("building", "Aryabhata Block")
+                .param("floor", "1st Floor")
+                .param("min_capacity", "55")
+                .param("has_projector", "true")
+                .param("has_ac", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(
+            jsonPath("$.rooms[*].id", containsInAnyOrder("room-cr1", "room-inactive")));
+  }
+
+  // --- Section C: Edge Cases & Boundary Values ---
+
+  @Test
+  void noMatchingRoomsReturnsEmptyList() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // 1. Kind not in building
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "AUDITORIUM")
+                .param("building", "Aryabhata Block"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", empty()));
+
+    // 2. Capacity beyond all rooms
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("min_capacity", "1000"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", empty()));
+  }
+
+  @Test
+  void capacityBoundaryConditions() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // Exact match: capacity=60 matches min_capacity=60
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM")
+                .param("min_capacity", "60"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(
+            jsonPath("$.rooms[*].id", containsInAnyOrder("room-cr1", "room-inactive")));
+
+    // Boundary exceed: capacity=60 excluded when min_capacity=61
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM")
+                .param("min_capacity", "61"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", empty()));
+  }
+
+  @Test
+  void roomsWithNullCapacityExcludedWhenMinCapacityQueried() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // When min_capacity is set, room-nocap is excluded
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("floor", "3rd Floor")
+                .param("min_capacity", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-sem1"));
+
+    // When min_capacity is omitted, room-nocap is included
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("floor", "3rd Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(
+            jsonPath("$.rooms[*].id", containsInAnyOrder("room-sem1", "room-nocap")));
+  }
+
+  @Test
+  void roomsWithNullFloorExcludedWhenFloorQueried() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // When floor is set to 1st Floor, room-nofloor is excluded
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("floor", "1st Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms[*].id", not(hasItem("room-nofloor"))));
+
+    // When floor is omitted, room-nofloor is included
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "CLASSROOM"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms[*].id", hasItem("room-nofloor")));
+  }
+
+  @Test
+  void caseInsensitiveAndWhitespaceTolerance() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "  classroom  ")
+                .param("building", "  aryabhata block  ")
+                .param("floor", "  1st floor  "))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(2)))
+        .andExpect(
+            jsonPath("$.rooms[*].id", containsInAnyOrder("room-cr1", "room-inactive")));
+  }
+
+  @Test
+  void omittedOptionalFiltersReturnFullInventory() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(9)))
+        .andExpect(
+            jsonPath(
+                "$.rooms[*].id",
+                containsInAnyOrder(
+                    "room-cr1",
+                    "room-cr2",
+                    "room-lt1",
+                    "room-lab1",
+                    "room-aud1",
+                    "room-sem1",
+                    "room-nocap",
+                    "room-nofloor",
+                    "room-inactive")));
+  }
+
+  @Test
+  void falseAmenityFlagsDoNotExcludeRooms() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // has_projector=false and has_ac=false mean amenity is not required (all rooms returned)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("has_projector", "false")
+                .param("has_ac", "false"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(9)));
+  }
+
+  // --- Section D: State & Reliability Regression Under Filters ---
+
+  @Test
+  void roomStateCalculationsPreservedUnderFilters() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // 1. Set timetable covered
+    timetableLookup.setCovered(true);
+
+    // 2. Set room-lab1 busy via timetable
+    timetableLookup.addBusy("room-lab1", new BusyInterval("10:00", "11:00", "CLASS"));
+
+    // 3. Set room-cr1 temporarily closed
+    OffsetDateTime closureStart = testDate.atTime(9, 0).atZone(INDIA).toOffsetDateTime();
+    OffsetDateTime closureEnd = testDate.atTime(12, 0).atZone(INDIA).toOffsetDateTime();
+    jdbc.update(
+        "INSERT INTO room_closures(id,room_id,starts_at,ends_at,reason,created_by,active,closure_type) VALUES (?,?,?,?,?,?,true,'TEMPORARY')",
+        UUID.randomUUID().toString(),
+        "room-cr1",
+        closureStart,
+        closureEnd,
+        "Network Switch Replacement",
+        "admin-1");
+
+    // Query 1st floor rooms in Aryabhata Block: room-cr1, room-lab1, room-inactive
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("building", "Aryabhata Block")
+                .param("floor", "1st Floor"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(3)))
+        .andExpect(jsonPath("$.rooms[?(@.id=='room-cr1')].state").value(hasItem("CLOSED")))
+        .andExpect(
+            jsonPath("$.rooms[?(@.id=='room-cr1')].reason")
+                .value(hasItem(containsString("Network Switch Replacement"))))
+        .andExpect(jsonPath("$.rooms[?(@.id=='room-lab1')].state").value(hasItem("OCCUPIED")))
+        .andExpect(
+            jsonPath("$.rooms[?(@.id=='room-lab1')].reason")
+                .value(hasItem(containsString("scheduled class or confirmed booking"))))
+        .andExpect(jsonPath("$.rooms[?(@.id=='room-inactive')].state").value(hasItem("CLOSED")))
+        .andExpect(
+            jsonPath("$.rooms[?(@.id=='room-inactive')].reason")
+                .value(hasItem(containsString("permanently closed or inactive"))));
+
+    // 4. When timetable is not covered, remaining rooms report UNKNOWN
+    timetableLookup.setCovered(false);
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00")
+                .param("kind", "LT"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms", hasSize(1)))
+        .andExpect(jsonPath("$.rooms[0].id").value("room-lt1"))
+        .andExpect(jsonPath("$.rooms[0].state").value("UNKNOWN"))
+        .andExpect(jsonPath("$.rooms[0].reason").value(containsString("not yet been verified")));
+  }
+
+  @Test
+  void operatingHoursValidationRemainsEnforcedWithFilters() throws Exception {
+    seedFilterCatalog();
+    LocalDate testDate = LocalDate.now(INDIA).plusDays(1);
+
+    // Invalid start time (< 08:00) with filters
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "07:00")
+                .param("end_time", "08:00")
+                .param("kind", "CLASSROOM")
+                .param("building", "Aryabhata Block"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(
+            jsonPath("$.detail")
+                .value(containsString("Campus operating hours are 08:00 to 20:00")));
+
+    // Invalid window (start >= end) with filters
+    mvc.perform(
+            get("/api/availability")
+                .param("date", testDate.toString())
+                .param("start_time", "11:00")
+                .param("end_time", "10:00")
+                .param("kind", "CLASSROOM")
+                .param("building", "Aryabhata Block"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Start time must be before end time")));
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
