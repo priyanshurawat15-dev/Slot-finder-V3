@@ -244,7 +244,7 @@ class CoreIntegrationTest {
             post("/api/requests/" + id + "/approve")
                 .cookie(coordinator.cookie())
                 .header("X-CSRF-Token", coordinator.csrf()))
-        .andExpect(status().isConflict());
+        .andExpect(status().isUnprocessableEntity());
     schedule.complete = true;
     mvc.perform(
             post("/api/requests/" + id + "/approve")
