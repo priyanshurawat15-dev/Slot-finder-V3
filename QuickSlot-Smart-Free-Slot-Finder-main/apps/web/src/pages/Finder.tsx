@@ -87,6 +87,10 @@ export function Finder() {
       setError(new Error("Choose an end time after the start time."));
       return;
     }
+    if (start < "08:00" || end > "20:00") {
+      setError(new Error("Campus operating hours are 08:00 to 20:00."));
+      return;
+    }
     setParams({
       date,
       start_time: start,

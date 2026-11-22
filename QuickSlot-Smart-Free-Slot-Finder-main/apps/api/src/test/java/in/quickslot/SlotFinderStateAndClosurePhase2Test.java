@@ -400,6 +400,225 @@ public class SlotFinderStateAndClosurePhase2Test {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // WP-2: Operating Hours & Window Validation Tests
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  @Test
+  void validBoundarySlotsSucceed() throws Exception {
+    LocalDate tomorrow = LocalDate.now(INDIA).plusDays(1);
+    timetableLookup.setCovered(true);
+
+    // Morning boundary: 08:00 to 09:00
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "08:00")
+                .param("end_time", "09:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms[0].state").value("AVAILABLE"));
+
+    // Evening boundary: 19:00 to 20:00
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "19:00")
+                .param("end_time", "20:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms[0].state").value("AVAILABLE"));
+  }
+
+  @Test
+  void invalidEarlyAndLateSlotsAreRejectedWith422() throws Exception {
+    LocalDate tomorrow = LocalDate.now(INDIA).plusDays(1);
+
+    // Starting before 08:00 (07:00 to 08:00)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "07:00")
+                .param("end_time", "08:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Campus operating hours are 08:00 to 20:00")));
+
+    // Starting before 08:00 (07:30 to 09:00)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "07:30")
+                .param("end_time", "09:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Campus operating hours are 08:00 to 20:00")));
+
+    // Ending after 20:00 (19:30 to 20:30)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "19:30")
+                .param("end_time", "20:30"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Campus operating hours are 08:00 to 20:00")));
+
+    // Ending after 20:00 (20:00 to 21:00)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "20:00")
+                .param("end_time", "21:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Campus operating hours are 08:00 to 20:00")));
+  }
+
+  @Test
+  void equalOrReversedTimeWindowsAreRejectedWith422() throws Exception {
+    LocalDate tomorrow = LocalDate.now(INDIA).plusDays(1);
+
+    // Equal start and end (10:00 to 10:00)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "10:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Start time must be before end time")));
+
+    // Start later than end (11:00 to 10:00)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "11:00")
+                .param("end_time", "10:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Start time must be before end time")));
+  }
+
+  @Test
+  void validMultiHourSlotSucceeds() throws Exception {
+    LocalDate tomorrow = LocalDate.now(INDIA).plusDays(1);
+    timetableLookup.setCovered(true);
+
+    // Multi-hour slot: 14:00 to 16:00 (Lab block)
+    mvc.perform(
+            get("/api/availability")
+                .param("date", tomorrow.toString())
+                .param("start_time", "14:00")
+                .param("end_time", "16:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rooms[0].state").value("AVAILABLE"));
+  }
+
+  @Test
+  void checkClashValidatesOperatingHoursAndWindow() throws Exception {
+    LocalDate tomorrow = LocalDate.now(INDIA).plusDays(1);
+
+    // check-clash before 08:00
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-101")
+                .param("date", tomorrow.toString())
+                .param("start_time", "07:00")
+                .param("end_time", "08:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Campus operating hours are 08:00 to 20:00")));
+
+    // check-clash after 20:00
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-101")
+                .param("date", tomorrow.toString())
+                .param("start_time", "20:00")
+                .param("end_time", "21:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Campus operating hours are 08:00 to 20:00")));
+
+    // check-clash equal start and end
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-101")
+                .param("date", tomorrow.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "10:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Start time must be before end time")));
+
+    // check-clash start after end
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-101")
+                .param("date", tomorrow.toString())
+                .param("start_time", "12:00")
+                .param("end_time", "11:00"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.detail").value(containsString("Start time must be before end time")));
+  }
+
+  @Test
+  void checkClashDetectsOccupiedAndClosedRooms() throws Exception {
+    LocalDate tomorrow = LocalDate.now(INDIA).plusDays(1);
+    timetableLookup.setCovered(true);
+
+    // 1. Available check
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-101")
+                .param("date", tomorrow.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("AVAILABLE"))
+        .andExpect(jsonPath("$.has_clash").value(false))
+        .andExpect(jsonPath("$.reason").value(containsString("verified free")));
+
+    // 2. Occupied check via timetable busy interval
+    timetableLookup.addBusy("room-101", new BusyInterval("10:00", "11:00", "CLASS"));
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-101")
+                .param("date", tomorrow.toString())
+                .param("start_time", "10:00")
+                .param("end_time", "11:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("OCCUPIED"))
+        .andExpect(jsonPath("$.has_clash").value(true))
+        .andExpect(jsonPath("$.reason").value(containsString("clashes with an existing class or confirmed booking")));
+
+    // 3. Closed check via active room closure
+    OffsetDateTime closureStart = tomorrow.atTime(14, 0).atZone(INDIA).toOffsetDateTime();
+    OffsetDateTime closureEnd = tomorrow.atTime(18, 0).atZone(INDIA).toOffsetDateTime();
+    jdbc.update(
+        "INSERT INTO room_closures(id,room_id,starts_at,ends_at,reason,created_by,active,closure_type) VALUES (?,?,?,?,?,?,true,'TEMPORARY')",
+        UUID.randomUUID().toString(),
+        "room-102",
+        closureStart,
+        closureEnd,
+        "Electrical Wiring Repair",
+        "admin-1");
+
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-102")
+                .param("date", tomorrow.toString())
+                .param("start_time", "15:00")
+                .param("end_time", "16:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("CLOSED"))
+        .andExpect(jsonPath("$.has_clash").value(true))
+        .andExpect(jsonPath("$.reason").value(containsString("Electrical Wiring Repair")));
+
+    // 4. Uncovered check: returns UNKNOWN with has_clash=false
+    timetableLookup.setCovered(false);
+    mvc.perform(
+            get("/api/availability/check-clash")
+                .param("room_id", "room-102")
+                .param("date", tomorrow.toString())
+                .param("start_time", "09:00")
+                .param("end_time", "10:00"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("UNKNOWN"))
+        .andExpect(jsonPath("$.has_clash").value(false))
+        .andExpect(jsonPath("$.reason").value(containsString("unverified")));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // TestConfiguration — controllable TimetableLookup stub
   // ─────────────────────────────────────────────────────────────────────────────
 

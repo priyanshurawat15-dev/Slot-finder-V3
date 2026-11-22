@@ -127,7 +127,18 @@ public class AvailabilityService {
     return output;
   }
 
+  public static final LocalTime OPERATING_HOURS_START = LocalTime.of(8, 0);
+  public static final LocalTime OPERATING_HOURS_END = LocalTime.of(20, 0);
+
   public static void validateWindow(LocalTime start, LocalTime end) {
-    if (!start.isBefore(end)) throw new ApiException(422, "Start must be before end.");
+    if (start == null || end == null) {
+      throw new ApiException(422, "Provide start time and end time.");
+    }
+    if (!start.isBefore(end)) {
+      throw new ApiException(422, "Start time must be before end time.");
+    }
+    if (start.isBefore(OPERATING_HOURS_START) || end.isAfter(OPERATING_HOURS_END)) {
+      throw new ApiException(422, "Campus operating hours are 08:00 to 20:00.");
+    }
   }
 }
