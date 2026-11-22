@@ -87,6 +87,10 @@ export function Finder() {
       setError(new Error("Choose an end time after the start time."));
       return;
     }
+    if (start < "08:00" || end > "20:00") {
+      setError(new Error("Campus operating hours are 08:00 to 20:00."));
+      return;
+    }
     setParams({
       date,
       start_time: start,
@@ -285,7 +289,8 @@ export function Finder() {
               {[
                 { state: "AVAILABLE", label: "Free" },
                 { state: "OCCUPIED", label: "In use / booked" },
-                { state: "RESTRICTED", label: "Restricted" },
+                { state: "CLOSED", label: "Closed" },
+                { state: "UNKNOWN", label: "Unverified" },
               ].map((item) => (
                 <div
                   className={`summary-card summary-${item.state.toLowerCase()}`}
@@ -342,7 +347,8 @@ export function Finder() {
                   { value: "", label: "All rooms" },
                   { value: "AVAILABLE", label: "Free" },
                   { value: "OCCUPIED", label: "In use / booked" },
-                  { value: "RESTRICTED", label: "Restricted" },
+                  { value: "CLOSED", label: "Closed" },
+                  { value: "UNKNOWN", label: "Unverified" },
                 ]}
               />
             </label>

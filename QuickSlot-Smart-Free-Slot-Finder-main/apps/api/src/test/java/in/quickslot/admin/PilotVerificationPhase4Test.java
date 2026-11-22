@@ -221,7 +221,7 @@ class PilotVerificationPhase4Test {
         .andExpect(jsonPath("$.closure_type").value("TEMPORARY"))
         .andExpect(jsonPath("$.active").value(true));
 
-    // Availability search for tomorrow 11:00 to 12:00 must show OCCUPIED
+    // Availability search for tomorrow 11:00 to 12:00 must show CLOSED
     mvc.perform(
             get("/api/availability")
                 .cookie(faculty.cookie())
@@ -229,7 +229,7 @@ class PilotVerificationPhase4Test {
                 .param("start_time", "11:00")
                 .param("end_time", "12:00"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.rooms[?(@.code=='CR 104')].state").value("OCCUPIED"));
+        .andExpect(jsonPath("$.rooms[?(@.code=='CR 104')].state").value("CLOSED"));
 
     // Submitting a booking request during the closure window must fail with 409 Conflict
     mvc.perform(

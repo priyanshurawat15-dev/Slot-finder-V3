@@ -7,7 +7,7 @@ interface HourSlotSelectProps {
 }
 
 export function HourSlotSelect({ start, end, onChange }: HourSlotSelectProps) {
-  const slots = Array.from({ length: 10 }, (_, index) => {
+  const slots = Array.from({ length: 12 }, (_, index) => {
     const hour = index + 8;
     const from = `${String(hour).padStart(2, "0")}:00`;
     const until = `${String(hour + 1).padStart(2, "0")}:00`;

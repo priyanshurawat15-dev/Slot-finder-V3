@@ -14,7 +14,7 @@ interface RoomDirectoryProps {
 const roomStateClass: Record<string, string> = {
   AVAILABLE: "room-card-available",
   OCCUPIED: "room-card-occupied",
-  RESTRICTED: "room-card-restricted",
+  CLOSED: "room-card-closed",
   UNKNOWN: "room-card-unknown",
 };
 
@@ -69,7 +69,7 @@ export function RoomDirectory({ rooms, date, start, end }: RoomDirectoryProps) {
                   {room.code} <span>({formatAbbr(room.kind)})</span>
                 </h3>
               </div>
-              {room.state !== "UNKNOWN" && <Status value={room.state} />}
+              <Status value={room.state} />
             </div>
             <dl className="room-details">
               <div>
@@ -186,8 +186,12 @@ export function RoomDirectory({ rooms, date, start, end }: RoomDirectoryProps) {
                 </span>
               )
             ) : (
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>
-                {room.state === "OCCUPIED" ? "In use / reserved" : "Restricted venue"}
+              <span style={{ fontSize: "12px", color: "var(--muted)", fontWeight: 500 }}>
+                {room.state === "OCCUPIED"
+                  ? "In use / reserved"
+                  : room.state === "CLOSED"
+                    ? "Room closed"
+                    : "Unverified schedule"}
               </span>
             )}
             <Link

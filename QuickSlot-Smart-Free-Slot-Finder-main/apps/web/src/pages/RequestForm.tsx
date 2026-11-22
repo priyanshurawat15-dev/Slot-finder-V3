@@ -83,6 +83,10 @@ export function RequestForm() {
       setError(new Error("The end time must be after the start time."));
       return;
     }
+    if (start < "08:00" || end > "20:00") {
+      setError(new Error("Campus operating hours are 08:00 to 20:00."));
+      return;
+    }
     if (user?.role === "CLUB_HEAD" && !clubId) {
       setError(new Error("Please select your assigned verified club."));
       return;
@@ -195,6 +199,25 @@ export function RequestForm() {
                   <AlertTriangle size={16} />
                   <span>
                     <strong>Conflict Warning:</strong> {clashStatus.reason}
+                  </span>
+                </div>
+              ) : clashStatus.state === "UNKNOWN" ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    color: "#92400e",
+                    fontSize: "13px",
+                  }}
+                >
+                  <AlertTriangle size={16} />
+                  <span>
+                    <strong>Unverified:</strong> {clashStatus.reason}
                   </span>
                 </div>
               ) : (

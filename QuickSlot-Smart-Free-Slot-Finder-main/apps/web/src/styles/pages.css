@@ -715,6 +715,16 @@
   background: #fff0f2;
   border-color: #edbdc6;
 }
+.summary-closed {
+  color: #9b1c1c;
+  background: #fdf2f2;
+  border-color: #f8b4b4;
+}
+.summary-unknown {
+  color: #9a3412;
+  background: #fef7ed;
+  border-color: #fed7aa;
+}
 .room-card-available {
   --card-accent: #147246;
   --card-surface: #f0fcf5;
@@ -723,9 +733,13 @@
   --card-accent: #af3445;
   --card-surface: #fff3f5;
 }
+.room-card-closed {
+  --card-accent: #9b1c1c;
+  --card-surface: #fff8f8;
+}
 .room-card-unknown {
-  --card-accent: #62615d;
-  --card-surface: #f5f5f3;
+  --card-accent: #b45309;
+  --card-surface: #fffbeb;
 }
 .room-card-available .status {
   background: #d7f4e4;
@@ -736,6 +750,16 @@
   background: #ffe1e7;
   border-color: #e4a3b0;
   color: #942a3a;
+}
+.room-card-closed .status {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+.room-card-unknown .status {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
 }
 @media (max-width: 680px) {
   .availability-summary {

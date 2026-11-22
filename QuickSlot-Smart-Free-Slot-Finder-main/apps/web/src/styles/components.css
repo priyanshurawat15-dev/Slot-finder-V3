@@ -200,6 +200,16 @@ input[type="file"]::file-selector-button {
   border-color: #e7d6d1;
   color: #7b4840;
 }
+.status-closed {
+  background: #fdf2f2;
+  border-color: #f8b4b4;
+  color: #9b1c1c;
+}
+.status-unknown {
+  background: #fef7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
 .status-forwarded,
 .status-reviewed {
   background: #f0ebf3;

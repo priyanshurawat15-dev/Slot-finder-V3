@@ -398,7 +398,7 @@ public class RequestService {
       }
 
       String state = availability.state(room.id(), item.date(), item.startTime(), item.endTime());
-      if (state.equals("OCCUPIED")) {
+      if (state.equals("OCCUPIED") || state.equals("CLOSED")) {
         throw new ApiException(409, "The room is occupied or booked during this time window.");
       }
       if (state.equals("UNKNOWN")) {
