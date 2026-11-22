@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Clock3, Search } from "lucide-react";
 import { api } from "../lib/api";
-import type { Availability } from "../lib/types";
+import type { Availability, Room } from "../lib/types";
 import { campusToday, displayDate, time } from "../lib/format";
 import { Empty, ErrorText, Loading, Notice } from "../components/ui";
 import { RoomDirectory } from "../features/availability/RoomDirectory";
@@ -10,34 +10,143 @@ import { HourSlotSelect } from "../components/HourSlotSelect";
 import { SelectField } from "../components/SelectField";
 import { canRequest, useAuth } from "../lib/auth";
 
+const ALLOWED_STATES = ["AVAILABLE", "OCCUPIED", "CLOSED", "UNKNOWN"] as const;
+
+function sanitizeState(raw: string | null): string {
+  if (!raw) return "";
+  const upper = raw.toUpperCase().trim();
+  return ALLOWED_STATES.includes(upper as (typeof ALLOWED_STATES)[number])
+    ? upper
+    : "";
+}
+
+function sanitizeCapacity(raw: string | null): string {
+  if (!raw) return "";
+  const num = Number(raw);
+  return Number.isFinite(num) && num > 0 ? String(Math.floor(num)) : "";
+}
+
+function sanitizeBoolean(raw: string | null): boolean {
+  if (!raw) return false;
+  const lower = raw.toLowerCase().trim();
+  return lower === "true" || lower === "1";
+}
+
 export function Finder() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [date, setDate] = useState(params.get("date") || campusToday());
-  const [start, setStart] = useState(params.get("start_time") || "10:00");
-  const [end, setEnd] = useState(params.get("end_time") || "11:00");
-  const [kind, setKind] = useState(params.get("kind") || "");
-  const [capacity, setCapacity] = useState("");
-  const [building, setBuilding] = useState("");
-  const [floor, setFloor] = useState("");
-  const [state, setState] = useState("");
-  const [requireProjector, setRequireProjector] = useState(false);
-  const [requireAc, setRequireAc] = useState(false);
+
+  // Helper to extract sanitized values from search params
+  const urlDate = params.get("date") || campusToday();
+  const urlStart = params.get("start_time") || "10:00";
+  const urlEnd = params.get("end_time") || "11:00";
+  const urlKind = params.get("kind") || "";
+  const urlBuilding = params.get("building") || "";
+  const urlFloor = params.get("floor") || "";
+  const urlState = sanitizeState(params.get("state"));
+  const urlCapacity = sanitizeCapacity(
+    params.get("min_capacity") || params.get("capacity"),
+  );
+  const urlProjector = sanitizeBoolean(
+    params.get("has_projector") || params.get("projector"),
+  );
+  const urlAc = sanitizeBoolean(params.get("has_ac") || params.get("ac"));
+
+  // Form input states initialized from URL
+  const [date, setDate] = useState(urlDate);
+  const [start, setStart] = useState(urlStart);
+  const [end, setEnd] = useState(urlEnd);
+  const [kind, setKind] = useState(urlKind);
+  const [capacity, setCapacity] = useState(urlCapacity);
+  const [building, setBuilding] = useState(urlBuilding);
+  const [floor, setFloor] = useState(urlFloor);
+  const [state, setState] = useState(urlState);
+  const [requireProjector, setRequireProjector] = useState(urlProjector);
+  const [requireAc, setRequireAc] = useState(urlAc);
+
+  const [allRooms, setAllRooms] = useState<Room[]>([]);
   const [data, setData] = useState<Availability | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
-  const query = params.toString();
 
+  // Sync state from URL when params change (handles browser back/forward navigation)
+  useEffect(() => {
+    setDate(urlDate);
+    setStart(urlStart);
+    setEnd(urlEnd);
+    setKind(urlKind);
+    setBuilding(urlBuilding);
+    setFloor(urlFloor);
+    setState(urlState);
+    setCapacity(urlCapacity);
+    setRequireProjector(urlProjector);
+    setRequireAc(urlAc);
+  }, [
+    urlDate,
+    urlStart,
+    urlEnd,
+    urlKind,
+    urlBuilding,
+    urlFloor,
+    urlState,
+    urlCapacity,
+    urlProjector,
+    urlAc,
+  ]);
+
+  // Fetch full room catalog for building and floor filter dropdown options
+  useEffect(() => {
+    api
+      .rooms()
+      .then(setAllRooms)
+      .catch(() => {});
+  }, []);
+
+  // Update URL helper: preserves unrelated params, removes empty/defaults, supports replace
+  const updateParams = (
+    updates: Record<string, string | boolean | undefined>,
+    replace = false,
+  ) => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, val] of Object.entries(updates)) {
+          if (val === undefined || val === "" || val === false) {
+            next.delete(key);
+          } else {
+            next.set(key, String(val));
+          }
+        }
+        // Clean up alternate aliases
+        if (updates.min_capacity !== undefined) next.delete("capacity");
+        if (updates.has_projector !== undefined) next.delete("projector");
+        if (updates.has_ac !== undefined) next.delete("ac");
+        return next;
+      },
+      { replace },
+    );
+  };
+
+  // Fetch availability whenever search criteria change (backend filter pass-through)
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    const search = new URLSearchParams(query);
-    if (!search.has("date")) search.set("date", campusToday());
-    if (!search.has("start_time")) search.set("start_time", "10:00");
-    if (!search.has("end_time")) search.set("end_time", "11:00");
+
+    // Build backend query with supported query parameters
+    const apiParams = new URLSearchParams();
+    apiParams.set("date", urlDate);
+    apiParams.set("start_time", urlStart);
+    apiParams.set("end_time", urlEnd);
+    if (urlKind) apiParams.set("kind", urlKind);
+    if (urlBuilding) apiParams.set("building", urlBuilding);
+    if (urlFloor) apiParams.set("floor", urlFloor);
+    if (urlCapacity) apiParams.set("min_capacity", urlCapacity);
+    if (urlProjector) apiParams.set("has_projector", "true");
+    if (urlAc) apiParams.set("has_ac", "true");
+
     api
-      .availability(search, controller.signal)
+      .availability(apiParams, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) setData(value);
       })
@@ -51,38 +160,72 @@ export function Finder() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [query]);
+  }, [
+    urlDate,
+    urlStart,
+    urlEnd,
+    urlKind,
+    urlBuilding,
+    urlFloor,
+    urlCapacity,
+    urlProjector,
+    urlAc,
+  ]);
 
-  const rooms = useMemo(
+  // Catalog of buildings and floors for filter dropdowns (falls back to current results if allRooms empty)
+  const buildings = useMemo(() => {
+    const source = allRooms.length > 0 ? allRooms : data?.rooms || [];
+    return [...new Set(source.map((r) => r.building).filter(Boolean))].sort();
+  }, [allRooms, data]);
+
+  const floors = useMemo(() => {
+    const source = allRooms.length > 0 ? allRooms : data?.rooms || [];
+    return [
+      ...new Set(
+        source.map((r) => r.floor).filter((f): f is string => Boolean(f)),
+      ),
+    ].sort();
+  }, [allRooms, data]);
+
+  // Rooms filtered by all criteria EXCEPT availability state (powers accurate summary cards)
+  const matchingRoomsBeforeState = useMemo(
     () =>
       (data?.rooms || []).filter(
         (room) =>
-          (!kind || room.kind === kind) &&
-          (!building || room.building === building) &&
-          (!floor || room.floor === floor) &&
-          (!state || room.state === state) &&
+          (!kind || room.kind.toUpperCase() === kind.toUpperCase()) &&
+          (!building ||
+            room.building.toUpperCase() === building.toUpperCase()) &&
+          (!floor ||
+            (room.floor && room.floor.toUpperCase() === floor.toUpperCase())) &&
           (!requireProjector || room.has_projector) &&
           (!requireAc || room.has_ac) &&
           (!capacity ||
             (room.capacity !== null && room.capacity >= Number(capacity))),
       ),
-    [data, kind, building, floor, state, capacity, requireProjector, requireAc],
+    [data, kind, building, floor, capacity, requireProjector, requireAc],
   );
-  const buildings = [
-    ...new Set(data?.rooms.map((room) => room.building).filter(Boolean) || []),
-  ];
-  const appliedStart = params.get("start_time") || "10:00";
-  const floors = [
-    ...new Set(
-      data?.rooms
-        .map((room) => room.floor)
-        .filter((value): value is string => !!value) || [],
-    ),
-  ];
-  const appliedEnd = params.get("end_time") || "11:00";
+
+  // Final rooms list filtered by state
+  const rooms = useMemo(
+    () =>
+      state
+        ? matchingRoomsBeforeState.filter((room) => room.state === state)
+        : matchingRoomsBeforeState,
+    [matchingRoomsBeforeState, state],
+  );
+
+  const appliedStart = urlStart;
+  const appliedEnd = urlEnd;
+
+  const toggleStateFilter = (targetState: string) => {
+    const nextState = state === targetState ? "" : targetState;
+    setState(nextState);
+    updateParams({ state: nextState || undefined }, true);
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError(null);
     if (end <= start) {
       setError(new Error("Choose an end time after the start time."));
       return;
@@ -91,12 +234,21 @@ export function Finder() {
       setError(new Error("Campus operating hours are 08:00 to 20:00."));
       return;
     }
-    setParams({
-      date,
-      start_time: start,
-      end_time: end,
-      ...(kind ? { kind } : {}),
-    });
+    updateParams(
+      {
+        date,
+        start_time: start,
+        end_time: end,
+        kind: kind || undefined,
+        building: building || undefined,
+        floor: floor || undefined,
+        state: state || undefined,
+        min_capacity: capacity || undefined,
+        has_projector: requireProjector || undefined,
+        has_ac: requireAc || undefined,
+      },
+      false,
+    );
   };
 
   return (
@@ -167,6 +319,10 @@ export function Finder() {
                     onClick={() => {
                       setStart(p.from);
                       setEnd(p.to);
+                      updateParams(
+                        { start_time: p.from, end_time: p.to },
+                        false,
+                      );
                     }}
                     style={{
                       padding: "3px 7px",
@@ -199,7 +355,10 @@ export function Finder() {
               <SelectField
                 aria-label="Venue type"
                 value={kind}
-                onValueChange={setKind}
+                onValueChange={(val) => {
+                  setKind(val);
+                  updateParams({ kind: val || undefined }, true);
+                }}
                 options={[
                   { value: "", label: "All venue types" },
                   { value: "CLASSROOM", label: "Classroom" },
@@ -229,7 +388,11 @@ export function Finder() {
                 <input
                   type="checkbox"
                   checked={requireProjector}
-                  onChange={(e) => setRequireProjector(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setRequireProjector(checked);
+                    updateParams({ has_projector: checked || undefined }, true);
+                  }}
                 />
                 Projector
               </label>
@@ -244,7 +407,11 @@ export function Finder() {
                 <input
                   type="checkbox"
                   checked={requireAc}
-                  onChange={(e) => setRequireAc(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setRequireAc(checked);
+                    updateParams({ has_ac: checked || undefined }, true);
+                  }}
                 />
                 AC
               </label>
@@ -258,6 +425,11 @@ export function Finder() {
                 placeholder="Any capacity"
                 value={capacity}
                 onChange={(event) => setCapacity(event.target.value)}
+                onBlur={() => {
+                  const sanitized = sanitizeCapacity(capacity);
+                  if (sanitized !== capacity) setCapacity(sanitized);
+                  updateParams({ min_capacity: sanitized || undefined }, true);
+                }}
               />
             </label>
             <button className="button button-primary" disabled={loading}>
@@ -291,17 +463,29 @@ export function Finder() {
                 { state: "OCCUPIED", label: "In use / booked" },
                 { state: "CLOSED", label: "Closed" },
                 { state: "UNKNOWN", label: "Unverified" },
-              ].map((item) => (
-                <div
-                  className={`summary-card summary-${item.state.toLowerCase()}`}
-                  key={item.state}
-                >
-                  <span>{item.label}</span>
-                  <strong>
-                    {rooms.filter((room) => room.state === item.state).length}
-                  </strong>
-                </div>
-              ))}
+              ].map((item) => {
+                const count = matchingRoomsBeforeState.filter(
+                  (room) => room.state === item.state,
+                ).length;
+                const isActive = state === item.state;
+                return (
+                  <button
+                    type="button"
+                    className={`summary-card summary-${item.state.toLowerCase()} ${isActive ? "active" : ""}`}
+                    key={item.state}
+                    onClick={() => toggleStateFilter(item.state)}
+                    aria-pressed={isActive}
+                    title={
+                      isActive
+                        ? `Clear ${item.label} filter`
+                        : `Filter by ${item.label} (${count})`
+                    }
+                  >
+                    <span>{item.label}</span>
+                    <strong>{count}</strong>
+                  </button>
+                );
+              })}
             </div>
           )}
           <div className="directory-filters">
@@ -311,7 +495,10 @@ export function Finder() {
                 aria-label="Building"
                 value={building}
                 disabled={!buildings.length}
-                onValueChange={setBuilding}
+                onValueChange={(val) => {
+                  setBuilding(val);
+                  updateParams({ building: val || undefined }, true);
+                }}
                 options={[
                   {
                     value: "",
@@ -327,7 +514,10 @@ export function Finder() {
                 aria-label="Floor"
                 value={floor}
                 disabled={!floors.length}
-                onValueChange={setFloor}
+                onValueChange={(val) => {
+                  setFloor(val);
+                  updateParams({ floor: val || undefined }, true);
+                }}
                 options={[
                   {
                     value: "",
@@ -342,7 +532,10 @@ export function Finder() {
               <SelectField
                 aria-label="Availability"
                 value={state}
-                onValueChange={setState}
+                onValueChange={(val) => {
+                  setState(val);
+                  updateParams({ state: val || undefined }, true);
+                }}
                 options={[
                   { value: "", label: "All rooms" },
                   { value: "AVAILABLE", label: "Free" },
