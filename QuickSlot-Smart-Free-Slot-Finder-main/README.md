@@ -90,18 +90,7 @@ Configure approved account provisioning and club-head verification, confirm room
 Terminal 1 — Backend (Spring Boot)
 cd "C:\Users\priya\OneDrive\Desktop\5th sem\PBL OS+DBMS\quick slot - version V3\QuickSlot-Smart-Free-Slot-Finder-main\apps\api"
 
-$env:DATABASE_URL = "jdbc:postgresql://127.0.0.1:5433/quickslot"
-$env:DATABASE_USER = "quickslot"
-$env:DATABASE_PASSWORD = "quickslot"
-$env:PORT = "8081"
-$env:COOKIE_SECURE = "false"
-$env:SPRING_PROFILES_ACTIVE = "demo"
-$env:DEMO_SEED = "true"
-
 .\mvnw.cmd spring-boot:run
-
-
-
 
 
 
