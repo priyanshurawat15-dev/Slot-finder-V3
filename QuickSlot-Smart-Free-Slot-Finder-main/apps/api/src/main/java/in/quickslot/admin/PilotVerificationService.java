@@ -103,6 +103,7 @@ public class PilotVerificationService {
     int totalSessions = 0;
     int sessionsInVerifiedRooms = 0;
     int sessionsInUnverifiedRooms = 0;
+    int onlineSessions = 0;
     int sessionsWithUnmappedFaculty = 0;
     int conflictsCount = 0;
 
@@ -115,27 +116,33 @@ public class PilotVerificationService {
     var sessionKeyMap = new HashMap<String, String>();
 
     for (var revRow : publishedRevs) {
-      String jsonSessions = (String) revRow.get("sessions");
+      String jsonSessions = extractJson(revRow.get("sessions"));
       if (jsonSessions != null && !jsonSessions.isBlank()) {
         try {
           List<Session> sessions = json.readValue(jsonSessions, new TypeReference<List<Session>>() {});
           totalSessions += sessions.size();
           for (var s : sessions) {
-            if (verifiedRoomIds.contains(s.roomId())) {
-              sessionsInVerifiedRooms++;
+            if (s.roomId() != null) {
+              if (verifiedRoomIds.contains(s.roomId())) {
+                sessionsInVerifiedRooms++;
+              } else {
+                sessionsInUnverifiedRooms++;
+              }
             } else {
-              sessionsInUnverifiedRooms++;
+              onlineSessions++;
             }
             if (s.facultyIds() != null && s.facultyIds().stream().anyMatch(fId -> !mappedFacultyIds.contains(fId))) {
               sessionsWithUnmappedFaculty++;
             }
 
-            // Check conflict: room + weekday + time
-            String slotKey = s.roomId() + "-" + s.weekday() + "-" + s.startTime() + "-" + s.endTime();
-            if (sessionKeyMap.containsKey(slotKey)) {
-              conflictsCount++;
-            } else {
-              sessionKeyMap.put(slotKey, s.subject());
+            // Check conflict: room + weekday + time (physical rooms only)
+            if (s.roomId() != null) {
+              String slotKey = s.roomId() + "-" + s.weekday() + "-" + s.startTime() + "-" + s.endTime();
+              if (sessionKeyMap.containsKey(slotKey)) {
+                conflictsCount++;
+              } else {
+                sessionKeyMap.put(slotKey, s.subject());
+              }
             }
           }
         } catch (IOException ignored) {}
@@ -148,6 +155,7 @@ public class PilotVerificationService {
     timetableSummary.put("total_sessions", totalSessions);
     timetableSummary.put("sessions_in_verified_rooms", sessionsInVerifiedRooms);
     timetableSummary.put("sessions_in_unverified_rooms", sessionsInUnverifiedRooms);
+    timetableSummary.put("online_sessions", onlineSessions);
     timetableSummary.put("sessions_with_unmapped_faculty", sessionsWithUnmappedFaculty);
     timetableSummary.put("conflicts_count", conflictsCount);
     report.put("timetable_summary", timetableSummary);
@@ -297,5 +305,25 @@ public class PilotVerificationService {
         .filter(m -> timetableFacultyId.equals(m.get("timetable_faculty_id")))
         .toList();
     return list.isEmpty() ? Map.of() : list.get(0);
+  }
+
+  static String extractJson(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw instanceof String str) {
+      return str;
+    }
+    try {
+      var method = raw.getClass().getMethod("getValue");
+      Object val = method.invoke(raw);
+      if (val instanceof String strVal) {
+        return strVal;
+      }
+      if (val != null) {
+        return val.toString();
+      }
+    } catch (ReflectiveOperationException ignored) {}
+    return raw.toString();
   }
 }

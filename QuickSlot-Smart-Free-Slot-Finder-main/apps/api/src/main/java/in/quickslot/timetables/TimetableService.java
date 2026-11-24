@@ -278,17 +278,41 @@ public class TimetableService implements TimetableLookup {
     var sessions =
         payload.sessions().stream()
             .map(
-                entry ->
-                    new Session(
-                        entry.id() == null ? id() : entry.id(),
-                        entry.weekday(),
-                        entry.startTime(),
-                        entry.endTime(),
-                        entry.roomId(),
-                        entry.subject(),
-                        entry.facultyIds(),
-                        sources.getOrDefault(
-                            entry.id(), Map.of("manual", true, "reviewer_id", user.id()))))
+                entry -> {
+                  Map<String, Object> src =
+                      entry.source() != null
+                          ? new LinkedHashMap<>(entry.source())
+                          : new LinkedHashMap<>(sources.getOrDefault(entry.id(), Map.of()));
+                  if (src.isEmpty()) {
+                    src.put("manual", true);
+                    src.put("reviewer_id", user.id());
+                  }
+                  String section = entry.section();
+                  if (section == null && src.containsKey("section")) {
+                    section = String.valueOf(src.get("section"));
+                  }
+                  String group = entry.group();
+                  if (group == null && src.containsKey("group")) {
+                    group = String.valueOf(src.get("group"));
+                  }
+                  String roomId = entry.roomId();
+                  if (entry.isOnline()) {
+                    src.put("delivery_mode", "ONLINE");
+                    src.put("is_online", true);
+                    roomId = null;
+                  }
+                  return new Session(
+                      entry.id() == null ? id() : entry.id(),
+                      entry.weekday(),
+                      entry.startTime(),
+                      entry.endTime(),
+                      roomId,
+                      entry.subject(),
+                      entry.facultyIds(),
+                      section,
+                      group,
+                      src);
+                })
             .toList();
     jdbc.update(
         "UPDATE timetable_revisions SET"
@@ -321,10 +345,23 @@ public class TimetableService implements TimetableLookup {
     for (var entry : sessions) {
       if (entry == null
           || entry.weekday() < 0
-          || entry.weekday() > 6
-          || !rooms.contains(entry.roomId()))
+          || entry.weekday() > 6) {
         throw new ApiException(
             422, "Every session requires a valid day and approved campus room ID");
+      }
+      if (entry.isOnline()) {
+        if (entry.roomId() != null && !"ONLINE".equalsIgnoreCase(entry.roomId())) {
+          if (!rooms.contains(entry.roomId())) {
+            throw new ApiException(
+                422, "Every session requires a valid day and approved campus room ID");
+          }
+        }
+      } else {
+        if (entry.roomId() == null || !rooms.contains(entry.roomId())) {
+          throw new ApiException(
+              422, "Every session requires a valid day and approved campus room ID");
+        }
+      }
       try {
         if (entry.startTime() == null
             || entry.endTime() == null
@@ -346,7 +383,7 @@ public class TimetableService implements TimetableLookup {
           || entry.subject().toUpperCase().contains("ELECTIVE"))
         throw new ApiException(422, "Resolve the exact subject, including elective subgroup");
       if (entry.facultyIds() == null
-          || entry.facultyIds().isEmpty()
+          || (!entry.isOnline() && entry.facultyIds().isEmpty())
           || entry.facultyIds().size() > 10
           || !faculty.containsAll(entry.facultyIds()))
         throw new ApiException(422, "Faculty IDs must be in the approved faculty directory");
@@ -357,7 +394,8 @@ public class TimetableService implements TimetableLookup {
       for (int j = i + 1; j < sessions.size(); j++) {
         var a = sessions.get(i);
         var b = sessions.get(j);
-        if (a.roomId().equals(b.roomId())
+        if (a.roomId() != null
+            && a.roomId().equals(b.roomId())
             && a.weekday() == b.weekday()
             && a.startTime().equals(b.startTime())
             && a.endTime().equals(b.endTime())
@@ -401,6 +439,9 @@ public class TimetableService implements TimetableLookup {
   }
 
   private static boolean overlaps(Session left, Session right) {
+    if (left.roomId() == null || right.roomId() == null) {
+      return false;
+    }
     return left.roomId().equals(right.roomId())
         && left.weekday() == right.weekday()
         && left.startTime().compareTo(right.endTime()) < 0
@@ -495,7 +536,7 @@ public class TimetableService implements TimetableLookup {
             from.plusDays(Math.floorMod(entry.weekday() - (from.getDayOfWeek().getValue() - 1), 7));
         if (first.isAfter(until)) continue;
         for (var candidate : other.sessions()) {
-          if (overlaps(entry, candidate)) {
+          if (entry.roomId() != null && candidate.roomId() != null && overlaps(entry, candidate)) {
             String roomCode = entry.roomId();
             var roomCodes = jdbc.queryForList("SELECT code FROM rooms WHERE id=?", String.class, entry.roomId());
             if (!roomCodes.isEmpty()) roomCode = roomCodes.get(0);
@@ -517,10 +558,40 @@ public class TimetableService implements TimetableLookup {
                     + candidate.subject()
                     + "'");
           }
+          if (entry.weekday() == candidate.weekday()
+              && entry.startTime().compareTo(candidate.endTime()) < 0
+              && candidate.startTime().compareTo(entry.endTime()) < 0) {
+            if (entry.facultyIds() != null && candidate.facultyIds() != null) {
+              for (String facId : entry.facultyIds()) {
+                if (facId != null && candidate.facultyIds().contains(facId)) {
+                  var facNames = jdbc.queryForList("SELECT name FROM timetable_faculty WHERE id=?", String.class, facId);
+                  String facName = facNames.isEmpty() ? facId : facNames.get(0);
+                  throw new ApiException(
+                      409,
+                      "Timetable conflicts with another published scope ('"
+                          + other.scopeKey()
+                          + "') for faculty member '"
+                          + facName
+                          + "' on weekday "
+                          + entry.weekday()
+                          + " ("
+                          + entry.startTime()
+                          + "-"
+                          + entry.endTime()
+                          + "): '"
+                          + entry.subject()
+                          + "' conflicts with '"
+                          + candidate.subject()
+                          + "'");
+                }
+              }
+            }
+          }
         }
       }
     }
     for (var entry : revision.sessions()) {
+      if (entry.roomId() == null) continue;
       var occupied =
           jdbc.query(
               "SELECT starts_at, ends_at, kind, source_id FROM occupancies WHERE room_id=? AND active AND starts_at<?"
@@ -596,9 +667,13 @@ public class TimetableService implements TimetableLookup {
         .flatMap(revision -> revision.sessions().stream())
         .filter(
             entry ->
-                entry.roomId().equals(roomId)
+                entry.roomId() != null
+                    && entry.roomId().equals(roomId)
                     && entry.weekday() == date.getDayOfWeek().getValue() - 1)
-        .map(entry -> new BusyInterval(entry.startTime(), entry.endTime(), "CLASS"))
+        .map(
+            entry ->
+                new BusyInterval(
+                    entry.startTime(), entry.endTime(), "CLASS", entry.section(), entry.group()))
         .toList();
   }
 
@@ -646,21 +721,24 @@ public class TimetableService implements TimetableLookup {
       for (var entry : revision.sessions())
         if (entry.weekday() == date.getDayOfWeek().getValue() - 1
             && entry.facultyIds().contains(facultyId)) {
-          var room = jdbc.queryForMap("SELECT code,building FROM rooms WHERE id=?", entry.roomId());
-          sessions.add(
-              Map.of(
-                  "start_time",
-                  entry.startTime(),
-                  "end_time",
-                  entry.endTime(),
-                  "subject",
-                  entry.subject(),
-                  "room_id",
-                  entry.roomId(),
-                  "room_code",
-                  room.get("code"),
-                  "building",
-                  room.get("building")));
+          Map<String, Object> session = new LinkedHashMap<>();
+          session.put("start_time", entry.startTime());
+          session.put("end_time", entry.endTime());
+          session.put("subject", entry.subject());
+          session.put("room_id", entry.roomId());
+          if (entry.roomId() == null) {
+            session.put("room_code", "ONLINE");
+            session.put("building", "ONLINE");
+            session.put("location", "ONLINE");
+          } else {
+            var room = jdbc.queryForMap("SELECT code,building FROM rooms WHERE id=?", entry.roomId());
+            session.put("room_code", room.get("code"));
+            session.put("building", room.get("building"));
+            session.put("location", "Room " + room.get("code") + " (" + room.get("building") + ")");
+          }
+          session.put("section", entry.section());
+          session.put("group", entry.group());
+          sessions.add(session);
         }
     }
     sessions.sort(java.util.Comparator.comparing(entry -> (String) entry.get("start_time")));

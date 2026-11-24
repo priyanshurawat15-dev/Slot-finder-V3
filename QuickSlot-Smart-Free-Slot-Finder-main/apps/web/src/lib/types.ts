@@ -40,6 +40,8 @@ export interface BusyInterval {
   start_time: string;
   end_time: string;
   title?: string;
+  section?: string | null;
+  group?: string | null;
 }
 
 export interface AvailableRoom extends Room {
@@ -124,6 +126,8 @@ export interface ScheduleSession {
   end_time: string;
   title: string;
   source_label?: string;
+  section?: string | null;
+  group?: string | null;
 }
 
 export interface RoomSchedule {
@@ -147,6 +151,8 @@ export interface ImportSession {
   room_id: string | null;
   subject: string;
   faculty_ids: string[];
+  section?: string | null;
+  group?: string | null;
   source?: Record<string, unknown>;
 }
 
@@ -219,6 +225,8 @@ export interface TeacherScheduleResult {
     room_id: string | null;
     room_code: string | null;
     building: string | null;
+    section?: string | null;
+    group?: string | null;
   }[];
   scheduled_classes?: {
     start_time: string;
@@ -227,6 +235,8 @@ export interface TeacherScheduleResult {
     room_id: string | null;
     room_code: string | null;
     building: string | null;
+    section?: string | null;
+    group?: string | null;
   }[];
   free_periods?: {
     start_time: string;
@@ -240,6 +250,8 @@ export interface TeacherScheduleResult {
     room_id: string | null;
     room_code: string | null;
     building: string | null;
+    section?: string | null;
+    group?: string | null;
   } | null;
 }
 
@@ -419,6 +431,7 @@ export interface PilotVerificationReport {
     total_sessions: number;
     sessions_in_verified_rooms: number;
     sessions_in_unverified_rooms: number;
+    online_sessions?: number;
     sessions_with_unmapped_faculty: number;
     conflicts_count: number;
   };

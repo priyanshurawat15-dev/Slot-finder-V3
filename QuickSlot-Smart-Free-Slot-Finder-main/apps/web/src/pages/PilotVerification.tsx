@@ -275,7 +275,10 @@ export function PilotVerification() {
               </div>
               <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>{report.timetable_summary.total_sessions} Sessions</div>
               <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                <span>{report.timetable_summary.sessions_in_verified_rooms} In Verified Rooms</span> •{" "}
+                <span>{report.timetable_summary.sessions_in_verified_rooms} In Verified Rooms</span>
+                {Boolean(report.timetable_summary.online_sessions) && (
+                  <> • <span>{report.timetable_summary.online_sessions} Online</span></>
+                )} •{" "}
                 <span style={{ color: report.timetable_summary.conflicts_count > 0 ? "#ef4444" : "#10b981" }}>
                   {report.timetable_summary.conflicts_count} Conflicts
                 </span>

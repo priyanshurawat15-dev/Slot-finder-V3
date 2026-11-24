@@ -99,6 +99,22 @@ export function RoomDetail() {
                           {time(session.start_time)}–{time(session.end_time)}
                         </span>
                         <strong>{session.title}</strong>
+                        {(session.section || session.group) && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--muted)",
+                              display: "block",
+                            }}
+                          >
+                            {[
+                              session.section ? `Sec ${session.section}` : null,
+                              session.group ? `Grp ${session.group}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        )}
                         {session.source_label && (
                           <small>{session.source_label}</small>
                         )}
