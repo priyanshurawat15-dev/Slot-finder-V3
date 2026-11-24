@@ -13,6 +13,112 @@ export function PilotVerification() {
   const [success, setSuccess] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "rooms" | "faculty">("overview");
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   // Room verification & closure modal states
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [closures, setClosures] = useState<RoomClosure[]>([]);
@@ -507,7 +613,7 @@ export function PilotVerification() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
           <div style={{ background: "var(--surface, #ffffff)", padding: "24px", borderRadius: "8px", width: "100%", maxWidth: "550px", maxHeight: "90vh", overflowY: "auto" }}>
             <h3 style={{ margin: "0 0 12px" }}>Manage Closures: {selectedRoom.code}</h3>
-            
+
             {/* Existing Active Closures */}
             {closures.length > 0 && (
               <div style={{ marginBottom: "16px" }}>

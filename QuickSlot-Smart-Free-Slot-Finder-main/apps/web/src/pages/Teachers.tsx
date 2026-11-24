@@ -215,26 +215,26 @@ export function Teachers() {
                       {schedule.next_scheduled_class.subject}
                       {(schedule.next_scheduled_class.section ||
                         schedule.next_scheduled_class.group) && (
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            marginLeft: "8px",
-                            color: "var(--muted)",
-                            fontWeight: 500,
-                          }}
-                        >
-                          {[
-                            schedule.next_scheduled_class.section
-                              ? `Sec ${schedule.next_scheduled_class.section}`
-                              : null,
-                            schedule.next_scheduled_class.group
-                              ? `Grp ${schedule.next_scheduled_class.group}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      )}
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              marginLeft: "8px",
+                              color: "var(--muted)",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {[
+                              schedule.next_scheduled_class.section
+                                ? `Sec ${schedule.next_scheduled_class.section}`
+                                : null,
+                              schedule.next_scheduled_class.group
+                                ? `Grp ${schedule.next_scheduled_class.group}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        )}
                     </h3>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -356,3 +356,77 @@ export function Teachers() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
