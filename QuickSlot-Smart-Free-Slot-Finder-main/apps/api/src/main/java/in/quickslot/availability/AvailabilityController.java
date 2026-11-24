@@ -100,18 +100,15 @@ public class AvailabilityController {
     for (int day = 0; day < 7; day++) {
       LocalDate current = monday.plusDays(day);
       for (var interval : availability.busy(id, current)) {
-        sessions.add(
-            Map.of(
-                "day_of_week",
-                day,
-                "start_time",
-                interval.startTime(),
-                "end_time",
-                interval.endTime(),
-                "title",
-                interval.kind(),
-                "source_label",
-                "Published schedule"));
+        var session = new LinkedHashMap<String, Object>();
+        session.put("day_of_week", day);
+        session.put("start_time", interval.startTime());
+        session.put("end_time", interval.endTime());
+        session.put("title", interval.kind());
+        session.put("source_label", "Published schedule");
+        if (interval.section() != null) session.put("section", interval.section());
+        if (interval.group() != null) session.put("group", interval.group());
+        sessions.add(session);
       }
     }
     return Map.of(

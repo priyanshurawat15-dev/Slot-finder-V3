@@ -213,6 +213,28 @@ export function Teachers() {
                     </span>
                     <h3 style={{ margin: "2px 0 0", fontSize: "16px" }}>
                       {schedule.next_scheduled_class.subject}
+                      {(schedule.next_scheduled_class.section ||
+                        schedule.next_scheduled_class.group) && (
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            marginLeft: "8px",
+                            color: "var(--muted)",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {[
+                            schedule.next_scheduled_class.section
+                              ? `Sec ${schedule.next_scheduled_class.section}`
+                              : null,
+                            schedule.next_scheduled_class.group
+                              ? `Grp ${schedule.next_scheduled_class.group}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      )}
                     </h3>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -287,11 +309,31 @@ export function Teachers() {
                       <strong>
                         {time(session.start_time)}–{time(session.end_time)}
                       </strong>
-                      <span>{session.subject}</span>
+                      <span>
+                        {session.subject}
+                        {(session.section || session.group) && (
+                          <small
+                            style={{
+                              display: "block",
+                              color: "var(--muted)",
+                              fontSize: "12px",
+                            }}
+                          >
+                            {[
+                              session.section ? `Sec ${session.section}` : null,
+                              session.group ? `Grp ${session.group}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </small>
+                        )}
+                      </span>
                       <span>
                         <MapPin size={16} />
                         {session.room_code
-                          ? `Room ${session.room_code} · ${session.building || ""}`
+                          ? session.room_code === "ONLINE"
+                            ? "Online"
+                            : `Room ${session.room_code} · ${session.building || ""}`
                           : "Room unresolved"}
                       </span>
                     </div>

@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.quickslot.availability.BusyInterval;
 import in.quickslot.availability.TimetableLookup;
 import in.quickslot.identity.AuthService;
+import in.quickslot.timetables.ImportData;
 import jakarta.servlet.http.Cookie;
 import java.sql.DriverManager;
 import java.time.LocalDate;
@@ -479,6 +480,87 @@ class PilotVerificationPhase4Test {
     assertThat(report.has("timetable_summary")).isTrue();
     assertThat(report.has("issues")).isTrue();
     assertThat(report.get("ready_for_pilot").asBoolean()).isTrue();
+  }
+
+  @Test
+  void testPilotVerificationReportHandlesOnlineSessionsWithNullRoomId() throws Exception {
+    var admin = login("admin@test.local", "password-2026");
+
+    // Insert scope and published revision containing physical and online sessions
+    jdbc.update(
+        "INSERT INTO timetable_scopes(id, campus_id, scope_key) VALUES ('scope-pilot-1', 'gehu-hill-dehradun', 'CSE-PILOT-REV')"
+            + " ON CONFLICT DO NOTHING");
+
+    var physicalVerified =
+        new ImportData.Session(
+            "s-phys-v",
+            0,
+            "09:00",
+            "10:00",
+            "room-cr104", // verified room
+            "Physical Verified",
+            List.of("fac-vikrant-sharma"),
+            "A",
+            null,
+            Map.of());
+
+    var physicalUnverified =
+        new ImportData.Session(
+            "s-phys-u",
+            0,
+            "10:00",
+            "11:00",
+            "room-cr404", // unverified room
+            "Physical Unverified",
+            List.of("fac-vikrant-sharma"),
+            "A",
+            null,
+            Map.of());
+
+    var onlineSession =
+        new ImportData.Session(
+            "s-online",
+            0,
+            "11:00",
+            "12:00",
+            null, // null roomId for online
+            "Cloud Computing Online",
+            List.of("fac-vikrant-sharma"),
+            "A",
+            null,
+            Map.of("delivery_mode", "ONLINE", "is_online", true));
+
+    String jsonSessions = json.writeValueAsString(List.of(physicalVerified, physicalUnverified, onlineSession));
+
+    jdbc.update(
+        "INSERT INTO timetable_revisions(id, scope_id, filename, sha256, content, status, version, valid_from, valid_until, sessions, created_by)"
+            + " VALUES ('rev-pilot-1', 'scope-pilot-1', 'pilot.pdf', 'sha256-dummy', '\\x00'::bytea, 'PUBLISHED', 1, '2026-07-01', '2026-12-31', ?::jsonb, 'admin-1')",
+        jsonSessions);
+
+    MvcResult reportRes = mvc.perform(
+            get("/api/admin/pilot/verification")
+                .cookie(admin.cookie()))
+        .andExpect(status().isOk())
+        .andReturn();
+    JsonNode report = json.readTree(reportRes.getResponse().getContentAsString());
+    JsonNode ttSummary = report.get("timetable_summary");
+
+    assertThat(ttSummary.get("total_sessions").asInt()).isEqualTo(3);
+    assertThat(ttSummary.get("sessions_in_verified_rooms").asInt()).isEqualTo(1);
+    assertThat(ttSummary.get("sessions_in_unverified_rooms").asInt()).isEqualTo(1);
+    assertThat(ttSummary.get("online_sessions").asInt()).isEqualTo(1);
+    assertThat(ttSummary.get("conflicts_count").asInt()).isEqualTo(0);
+  }
+
+  @Test
+  void testExtractJsonHandlesPGobjectAndString() throws Exception {
+    assertThat(PilotVerificationService.extractJson(null)).isNull();
+    assertThat(PilotVerificationService.extractJson("{\"test\": 1}")).isEqualTo("{\"test\": 1}");
+
+    var pgObject = new org.postgresql.util.PGobject();
+    pgObject.setType("jsonb");
+    pgObject.setValue("[{\"id\": \"s-1\"}]");
+    assertThat(PilotVerificationService.extractJson(pgObject)).isEqualTo("[{\"id\": \"s-1\"}]");
   }
 
   @TestConfiguration
