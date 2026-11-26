@@ -530,7 +530,20 @@ class PilotVerificationPhase4Test {
             null,
             Map.of("delivery_mode", "ONLINE", "is_online", true));
 
-    String jsonSessions = json.writeValueAsString(List.of(physicalVerified, physicalUnverified, onlineSession));
+    var physicalNullRoom =
+        new ImportData.Session(
+            "s-phys-null-room",
+            0,
+            "12:00",
+            "13:00",
+            null, // null roomId but NOT online
+            "Physical Unresolved Room",
+            List.of("fac-vikrant-sharma"),
+            "A",
+            null,
+            Map.of());
+
+    String jsonSessions = json.writeValueAsString(List.of(physicalVerified, physicalUnverified, onlineSession, physicalNullRoom));
 
     jdbc.update(
         "INSERT INTO timetable_revisions(id, scope_id, filename, sha256, content, status, version, valid_from, valid_until, sessions, created_by)"
@@ -545,9 +558,9 @@ class PilotVerificationPhase4Test {
     JsonNode report = json.readTree(reportRes.getResponse().getContentAsString());
     JsonNode ttSummary = report.get("timetable_summary");
 
-    assertThat(ttSummary.get("total_sessions").asInt()).isEqualTo(3);
+    assertThat(ttSummary.get("total_sessions").asInt()).isEqualTo(4);
     assertThat(ttSummary.get("sessions_in_verified_rooms").asInt()).isEqualTo(1);
-    assertThat(ttSummary.get("sessions_in_unverified_rooms").asInt()).isEqualTo(1);
+    assertThat(ttSummary.get("sessions_in_unverified_rooms").asInt()).isEqualTo(2);
     assertThat(ttSummary.get("online_sessions").asInt()).isEqualTo(1);
     assertThat(ttSummary.get("conflicts_count").asInt()).isEqualTo(0);
   }

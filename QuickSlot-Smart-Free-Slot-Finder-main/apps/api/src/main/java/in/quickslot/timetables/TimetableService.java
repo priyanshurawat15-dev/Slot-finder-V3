@@ -720,6 +720,7 @@ public class TimetableService implements TimetableLookup {
       if (!revision.campusId().equals(user.campusId())) continue;
       for (var entry : revision.sessions())
         if (entry.weekday() == date.getDayOfWeek().getValue() - 1
+            && entry.facultyIds() != null
             && entry.facultyIds().contains(facultyId)) {
           Map<String, Object> session = new LinkedHashMap<>();
           session.put("start_time", entry.startTime());
@@ -731,10 +732,17 @@ public class TimetableService implements TimetableLookup {
             session.put("building", "ONLINE");
             session.put("location", "ONLINE");
           } else {
-            var room = jdbc.queryForMap("SELECT code,building FROM rooms WHERE id=?", entry.roomId());
-            session.put("room_code", room.get("code"));
-            session.put("building", room.get("building"));
-            session.put("location", "Room " + room.get("code") + " (" + room.get("building") + ")");
+            var roomRows = jdbc.queryForList("SELECT code,building FROM rooms WHERE id=?", entry.roomId());
+            if (!roomRows.isEmpty()) {
+              var room = roomRows.get(0);
+              session.put("room_code", room.get("code"));
+              session.put("building", room.get("building"));
+              session.put("location", "Room " + room.get("code") + " (" + room.get("building") + ")");
+            } else {
+              session.put("room_code", entry.roomId());
+              session.put("building", "Unassigned");
+              session.put("location", "Room " + entry.roomId() + " (Unassigned)");
+            }
           }
           session.put("section", entry.section());
           session.put("group", entry.group());
