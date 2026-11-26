@@ -128,8 +128,10 @@ public class PilotVerificationService {
               } else {
                 sessionsInUnverifiedRooms++;
               }
-            } else {
+            } else if (s.isOnline()) {
               onlineSessions++;
+            } else {
+              sessionsInUnverifiedRooms++;
             }
             if (s.facultyIds() != null && s.facultyIds().stream().anyMatch(fId -> !mappedFacultyIds.contains(fId))) {
               sessionsWithUnmappedFaculty++;

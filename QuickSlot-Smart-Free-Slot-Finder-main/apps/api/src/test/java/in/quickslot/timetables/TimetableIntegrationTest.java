@@ -943,4 +943,115 @@ class TimetableIntegrationTest {
     var currentPub = service.publish(currentScope, 1, admin);
     assertThat(currentPub.get("status")).isEqualTo("PUBLISHED");
   }
+
+  @Test
+  void onlineSessionWithNullOrEmptyFacultyDoesNotCrashTeacherSchedule() throws Exception {
+    var from = LocalDate.of(2026, 7, 1);
+    var until = LocalDate.of(2026, 12, 31);
+    String id = draft("CSE-FACULTY-NULL", from, until);
+
+    var onlineEmptyFaculty =
+        new ImportData.Session(
+            "online-empty",
+            0,
+            "10:00",
+            "11:00",
+            null,
+            "MOOC Autonomous Study",
+            List.of(),
+            "A",
+            null,
+            Map.of("delivery_mode", "ONLINE"));
+
+    var onlineNullFaculty =
+        new ImportData.Session(
+            "online-null",
+            0,
+            "11:00",
+            "12:00",
+            null,
+            "Swayam Asynchronous",
+            null,
+            "A",
+            null,
+            Map.of("delivery_mode", "ONLINE"));
+
+    var facultySession =
+        new ImportData.Session(
+            "phys-f001",
+            0,
+            "14:00",
+            "15:00",
+            "room",
+            "Operating Systems",
+            List.of("F001"),
+            "A",
+            null,
+            Map.of());
+
+    String jsonSessions = json.writeValueAsString(List.of(onlineEmptyFaculty, onlineNullFaculty, facultySession));
+    String scopeId = jdbc.queryForObject("SELECT scope_id FROM timetable_revisions WHERE id=?", String.class, id);
+    jdbc.update(
+        "UPDATE timetable_revisions SET sessions=?::jsonb, status='PUBLISHED', published_at=now(), valid_from=?, valid_until=? WHERE id=?",
+        jsonSessions, from, until, id);
+    jdbc.update(
+        "INSERT INTO timetable_publications(id, scope_id, revision_id, valid_from, valid_until) VALUES (?, ?, ?, ?, ?)",
+        UUID.randomUUID().toString(), scopeId, id, from, until);
+
+    var cookie = sessionFor("FACULTY", "gehu-hill-dehradun");
+    LocalDate testDate = LocalDate.of(2026, 10, 5); // Monday
+
+    // Querying F001 should not crash despite online sessions with empty or null facultyIds
+    mvc.perform(get("/api/timetables/teachers/F001/schedule").param("date", testDate.toString()).cookie(cookie))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sessions").isArray())
+        .andExpect(jsonPath("$.sessions[0].subject").value("Operating Systems"));
+
+    // Querying an unrelated faculty should also not crash and return empty sessions
+    service.addFaculty("F003", "Third Faculty", admin);
+    mvc.perform(get("/api/timetables/teachers/F003/schedule").param("date", testDate.toString()).cookie(cookie))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sessions").isArray())
+        .andExpect(jsonPath("$.sessions").isEmpty());
+  }
+
+  @Test
+  void missingRoomLookupDoesNotCrashTeacherScheduleAndReturnsFallback() throws Exception {
+    var from = LocalDate.of(2026, 7, 1);
+    var until = LocalDate.of(2026, 12, 31);
+    String id = draft("CSE-MISSING-ROOM", from, until);
+
+    var missingRoomSession =
+        new ImportData.Session(
+            "missing-room-s",
+            0,
+            "10:00",
+            "11:00",
+            "room-deleted-999",
+            "Ghost Room Lecture",
+            List.of("F001"),
+            "A",
+            null,
+            Map.of());
+
+    String jsonSessions = json.writeValueAsString(List.of(missingRoomSession));
+    String scopeId = jdbc.queryForObject("SELECT scope_id FROM timetable_revisions WHERE id=?", String.class, id);
+    jdbc.update(
+        "UPDATE timetable_revisions SET sessions=?::jsonb, status='PUBLISHED', published_at=now(), valid_from=?, valid_until=? WHERE id=?",
+        jsonSessions, from, until, id);
+    jdbc.update(
+        "INSERT INTO timetable_publications(id, scope_id, revision_id, valid_from, valid_until) VALUES (?, ?, ?, ?, ?)",
+        UUID.randomUUID().toString(), scopeId, id, from, until);
+
+    var cookie = sessionFor("FACULTY", "gehu-hill-dehradun");
+    LocalDate testDate = LocalDate.of(2026, 10, 5); // Monday
+
+    mvc.perform(get("/api/timetables/teachers/F001/schedule").param("date", testDate.toString()).cookie(cookie))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sessions[0].subject").value("Ghost Room Lecture"))
+        .andExpect(jsonPath("$.sessions[0].room_id").value("room-deleted-999"))
+        .andExpect(jsonPath("$.sessions[0].room_code").value("room-deleted-999"))
+        .andExpect(jsonPath("$.sessions[0].building").value("Unassigned"))
+        .andExpect(jsonPath("$.sessions[0].location").value("Room room-deleted-999 (Unassigned)"));
+  }
 }
