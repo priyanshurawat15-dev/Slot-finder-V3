@@ -156,4 +156,69 @@ class TimetableAdaptersTest {
     assertThatThrownBy(() -> TimeColumns.parse(List.of("12:55 - 01:50"), false))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void sectionAndGroupNormalizationAndConflictRules() {
+    // Section matching
+    assertThat(TimetableService.isSameSection("A", "A")).isTrue();
+    assertThat(TimetableService.isSameSection("A", "a")).isTrue();
+    assertThat(TimetableService.isSameSection(" A ", "a")).isTrue();
+    assertThat(TimetableService.isSameSection("A", "B")).isFalse();
+    assertThat(TimetableService.isSameSection(null, "A")).isFalse();
+    assertThat(TimetableService.isSameSection("A", null)).isFalse();
+    assertThat(TimetableService.isSameSection("", "A")).isFalse();
+    assertThat(TimetableService.isSameSection("  ", "  ")).isFalse();
+    assertThat(TimetableService.isSameSection(null, null)).isFalse();
+
+    // Group normalization
+    assertThat(TimetableService.normalizeGroup(null)).isNull();
+    assertThat(TimetableService.normalizeGroup("")).isNull();
+    assertThat(TimetableService.normalizeGroup("   ")).isNull();
+    assertThat(TimetableService.normalizeGroup("ALL")).isNull();
+    assertThat(TimetableService.normalizeGroup("all")).isNull();
+    assertThat(TimetableService.normalizeGroup("COMMON")).isNull();
+    assertThat(TimetableService.normalizeGroup("WHOLE")).isNull();
+    assertThat(TimetableService.normalizeGroup("ENTIRE")).isNull();
+    assertThat(TimetableService.normalizeGroup("NONE")).isNull();
+    assertThat(TimetableService.normalizeGroup("WHOLE SECTION")).isNull();
+
+    // Common subgroup formats
+    assertThat(TimetableService.normalizeGroup("G1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("g1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("Group 1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("group 1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("Grp 1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("grp 1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("Group-1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("group-1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("Grp-1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("G 1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("G-1")).isEqualTo("G1");
+    assertThat(TimetableService.normalizeGroup("G2")).isEqualTo("G2");
+    assertThat(TimetableService.normalizeGroup("Group 2")).isEqualTo("G2");
+
+    // Preserved unknown group strings
+    assertThat(TimetableService.normalizeGroup("Batch A")).isEqualTo("BATCH A");
+    assertThat(TimetableService.normalizeGroup("Batch B")).isEqualTo("BATCH B");
+
+    // Group conflict logic
+    // Whole-section (null) conflicts with everything in that section
+    assertThat(TimetableService.areGroupsConflicting(null, null)).isTrue();
+    assertThat(TimetableService.areGroupsConflicting(null, "G1")).isTrue();
+    assertThat(TimetableService.areGroupsConflicting("G1", null)).isTrue();
+    assertThat(TimetableService.areGroupsConflicting("ALL", "G1")).isTrue();
+    assertThat(TimetableService.areGroupsConflicting("WHOLE", "COMMON")).isTrue();
+
+    // Same normalized subgroup conflicts
+    assertThat(TimetableService.areGroupsConflicting("G1", "G1")).isTrue();
+    assertThat(TimetableService.areGroupsConflicting("G1", "g1")).isTrue();
+    assertThat(TimetableService.areGroupsConflicting("Group 1", "G1")).isTrue();
+    assertThat(TimetableService.areGroupsConflicting("Grp 1", "Group-1")).isTrue();
+
+    // Different explicit subgroups allowed concurrently
+    assertThat(TimetableService.areGroupsConflicting("G1", "G2")).isFalse();
+    assertThat(TimetableService.areGroupsConflicting("Group 1", "Group 2")).isFalse();
+    assertThat(TimetableService.areGroupsConflicting("Batch A", "Batch B")).isFalse();
+    assertThat(TimetableService.areGroupsConflicting("Batch A", "Batch A")).isTrue();
+  }
 }

@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -415,23 +416,46 @@ public class TimetableService implements TimetableLookup {
         if (a.weekday() == b.weekday()
             && a.startTime().compareTo(b.endTime()) < 0
             && b.startTime().compareTo(a.endTime()) < 0) {
-          for (String facId : a.facultyIds()) {
-            if (b.facultyIds().contains(facId)) {
-              throw new ApiException(
-                  422,
-                  "Faculty member '"
-                      + facId
-                      + "' is scheduled for overlapping classes on weekday "
-                      + a.weekday()
-                      + " between "
-                      + a.startTime()
-                      + "-"
-                      + a.endTime()
-                      + " and "
-                      + b.startTime()
-                      + "-"
-                      + b.endTime());
+          if (a.facultyIds() != null && b.facultyIds() != null) {
+            for (String facId : a.facultyIds()) {
+              if (facId != null && b.facultyIds().contains(facId)) {
+                throw new ApiException(
+                    422,
+                    "Faculty member '"
+                        + facId
+                        + "' is scheduled for overlapping classes on weekday "
+                        + a.weekday()
+                        + " between "
+                        + a.startTime()
+                        + "-"
+                        + a.endTime()
+                        + " and "
+                        + b.startTime()
+                        + "-"
+                        + b.endTime());
+              }
             }
+          }
+          if (isSectionConflict(a, b)) {
+            throw new ApiException(
+                422,
+                "Section '"
+                    + a.section().strip()
+                    + "' is scheduled for overlapping classes on weekday "
+                    + a.weekday()
+                    + " ("
+                    + a.startTime()
+                    + "-"
+                    + a.endTime()
+                    + " '"
+                    + a.subject()
+                    + "' and "
+                    + b.startTime()
+                    + "-"
+                    + b.endTime()
+                    + " '"
+                    + b.subject()
+                    + "')");
           }
         }
       }
@@ -446,6 +470,51 @@ public class TimetableService implements TimetableLookup {
         && left.weekday() == right.weekday()
         && left.startTime().compareTo(right.endTime()) < 0
         && right.startTime().compareTo(left.endTime()) < 0;
+  }
+
+  private static final Pattern SUBGROUP_PATTERN =
+      Pattern.compile("^G(?:ROUP|RP)?\\s*[- ]?\\s*([0-9A-Z]+)$", Pattern.CASE_INSENSITIVE);
+
+  public static boolean isSameSection(String secA, String secB) {
+    if (secA == null || secB == null) return false;
+    String sA = secA.strip();
+    String sB = secB.strip();
+    return !sA.isEmpty() && !sB.isEmpty() && sA.equalsIgnoreCase(sB);
+  }
+
+  public static String normalizeGroup(String raw) {
+    if (raw == null) return null;
+    String s = raw.strip();
+    if (s.isEmpty()
+        || s.equalsIgnoreCase("ALL")
+        || s.equalsIgnoreCase("COMMON")
+        || s.equalsIgnoreCase("WHOLE")
+        || s.equalsIgnoreCase("ENTIRE")
+        || s.equalsIgnoreCase("NONE")
+        || s.equalsIgnoreCase("WHOLE SECTION")
+        || s.equalsIgnoreCase("ALL GROUPS")) {
+      return null;
+    }
+    String upper = s.toUpperCase(Locale.ROOT);
+    var matcher = SUBGROUP_PATTERN.matcher(upper);
+    if (matcher.matches()) {
+      return "G" + matcher.group(1);
+    }
+    return upper;
+  }
+
+  public static boolean areGroupsConflicting(String groupA, String groupB) {
+    String gA = normalizeGroup(groupA);
+    String gB = normalizeGroup(groupB);
+    if (gA == null || gB == null) {
+      return true; // Whole-section session conflicts with every overlapping session of that section
+    }
+    return gA.equalsIgnoreCase(gB);
+  }
+
+  public static boolean isSectionConflict(Session a, Session b) {
+    if (!isSameSection(a.section(), b.section())) return false;
+    return areGroupsConflicting(a.group(), b.group());
   }
 
   private List<Window> windows(String suffix, Object... args) {

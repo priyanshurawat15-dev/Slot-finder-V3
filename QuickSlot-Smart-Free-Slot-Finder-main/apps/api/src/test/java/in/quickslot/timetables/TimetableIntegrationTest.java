@@ -1054,4 +1054,195 @@ class TimetableIntegrationTest {
         .andExpect(jsonPath("$.sessions[0].building").value("Unassigned"))
         .andExpect(jsonPath("$.sessions[0].location").value("Room room-deleted-999 (Unassigned)"));
   }
+
+  private ImportData.Session sectionSession(
+      String id,
+      String start,
+      String end,
+      String roomId,
+      String subject,
+      String facultyId,
+      String section,
+      String group) {
+    Map<String, Object> source = new java.util.HashMap<>();
+    if (section != null) source.put("section", section);
+    if (group != null) source.put("group", group);
+    if (roomId == null) source.put("delivery_mode", "ONLINE");
+    return new ImportData.Session(
+        id,
+        0,
+        start,
+        end,
+        roomId,
+        subject,
+        facultyId != null ? List.of(facultyId) : List.of(),
+        section,
+        group,
+        source);
+  }
+
+  @Test
+  void sameSectionOverlappingTimeDifferentRoomsAndFacultyFailsValidation() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures", "F001", "A", null);
+    var s2 = sectionSession("s2", "09:30", "10:30", "room-2", "Operating Systems", "F002", "A", null);
+
+    String id = draft("CSE-SEC-CONFLICT", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    assertThatThrownBy(
+            () ->
+                service.review(
+                    id,
+                    new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+                    admin))
+        .isInstanceOf(ApiException.class)
+        .matches(ex -> ((ApiException) ex).status() == 422)
+        .hasMessage(
+            "Section 'A' is scheduled for overlapping classes on weekday 0 (09:00-10:00 'Data Structures' and 09:30-10:30 'Operating Systems')");
+  }
+
+  @Test
+  void differentSectionsOverlappingTimeAllowed() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures", "F001", "A", null);
+    var s2 = sectionSession("s2", "09:00", "10:00", "room-2", "Operating Systems", "F002", "B", null);
+
+    String id = draft("CSE-SEC-DIFF", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    var review =
+        service.review(
+            id,
+            new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+            admin);
+    assertThat(review.get("status")).isEqualTo("REVIEWED");
+  }
+
+  @Test
+  void nullOrBlankSectionValuesDoNotTriggerSectionConflict() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    service.addFaculty("F003", "Third Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures", "F001", null, null);
+    var s2 = sectionSession("s2", "09:00", "10:00", null, "Online Cloud", "F002", "   ", null);
+    var s3 = sectionSession("s3", "09:00", "10:00", "room-2", "Algorithms", "F003", "A", null);
+
+    String id = draft("CSE-SEC-NULL", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    var review =
+        service.review(
+            id,
+            new TimetableService.Review(0, List.of(s1, s2, s3), List.of("room", "room-2"), true),
+            admin);
+    assertThat(review.get("status")).isEqualTo("REVIEWED");
+  }
+
+  @Test
+  void differentExplicitSubgroupsG1AndG2AllowedConcurrently() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures Lab", "F001", "A", "G1");
+    var s2 = sectionSession("s2", "09:00", "10:00", "room-2", "Networks Lab", "F002", "A", "G2");
+
+    String id = draft("CSE-SUBGROUP-DIFF", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    var review =
+        service.review(
+            id,
+            new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+            admin);
+    assertThat(review.get("status")).isEqualTo("REVIEWED");
+  }
+
+  @Test
+  void sameSubgroupG1VsG1TriggersConflict() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures Lab", "F001", "A", "G1");
+    var s2 = sectionSession("s2", "09:30", "10:30", "room-2", "Networks Lab", "F002", "A", "G1");
+
+    String id = draft("CSE-SUBGROUP-SAME", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    assertThatThrownBy(
+            () ->
+                service.review(
+                    id,
+                    new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+                    admin))
+        .isInstanceOf(ApiException.class)
+        .matches(ex -> ((ApiException) ex).status() == 422)
+        .hasMessageContaining("Section 'A' is scheduled for overlapping classes");
+  }
+
+  @Test
+  void wholeSectionNullGroupVsG1TriggersConflict() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures Lecture", "F001", "A", null);
+    var s2 = sectionSession("s2", "09:30", "10:30", "room-2", "Networks Lab", "F002", "A", "G1");
+
+    String id = draft("CSE-WHOLE-VS-G1", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    assertThatThrownBy(
+            () ->
+                service.review(
+                    id,
+                    new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+                    admin))
+        .isInstanceOf(ApiException.class)
+        .matches(ex -> ((ApiException) ex).status() == 422)
+        .hasMessageContaining("Section 'A' is scheduled for overlapping classes");
+  }
+
+  @Test
+  void nullGroupVsAllGroupTriggersConflict() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures Lecture", "F001", "A", null);
+    var s2 = sectionSession("s2", "09:30", "10:30", "room-2", "Mathematics Lecture", "F002", "A", "ALL");
+
+    String id = draft("CSE-NULL-VS-ALL", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    assertThatThrownBy(
+            () ->
+                service.review(
+                    id,
+                    new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+                    admin))
+        .isInstanceOf(ApiException.class)
+        .matches(ex -> ((ApiException) ex).status() == 422)
+        .hasMessageContaining("Section 'A' is scheduled for overlapping classes");
+  }
+
+  @Test
+  void group1VariationsNormalizeAndTriggerConflict() throws Exception {
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+    var s1 = sectionSession("s1", "09:00", "10:00", "room", "Data Structures Lab", "F001", "A", "Group 1");
+    var s2 = sectionSession("s2", "09:30", "10:30", "room-2", "Networks Lab", "F002", "a", "g1");
+
+    String id = draft("CSE-GRP-NORM", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 12, 31));
+    assertThatThrownBy(
+            () ->
+                service.review(
+                    id,
+                    new TimetableService.Review(0, List.of(s1, s2), List.of("room", "room-2"), true),
+                    admin))
+        .isInstanceOf(ApiException.class)
+        .matches(ex -> ((ApiException) ex).status() == 422)
+        .hasMessageContaining("Section 'A' is scheduled for overlapping classes");
+  }
+
+  @Test
+  void differentSemestersWithSameSectionLetterDoNotConflictAcrossScopes() throws Exception {
+    var from = LocalDate.of(2026, 7, 1);
+    var until = LocalDate.of(2026, 12, 31);
+    jdbc.update("INSERT INTO rooms(id,code,kind,building,capacity) VALUES ('room-2','018','CLASSROOM','Main',40)");
+    service.addFaculty("F002", "Second Faculty", admin);
+
+    var s1 = sectionSession("sem3-s1", "09:00", "10:00", "room", "Data Structures", "F001", "A", null);
+    String id1 = draft("CSE-SEM3", from, until);
+    service.review(id1, new TimetableService.Review(0, List.of(s1), List.of("room"), true), admin);
+    service.publish(id1, 1, admin);
+
+    var s2 = sectionSession("sem5-s1", "09:00", "10:00", "room-2", "Compiler Design", "F002", "A", null);
+    String id2 = draft("CSE-SEM5", from, until);
+    service.review(id2, new TimetableService.Review(0, List.of(s2), List.of("room-2"), true), admin);
+    var pubResult = service.publish(id2, 1, admin);
+    assertThat(pubResult.get("status")).isEqualTo("PUBLISHED");
+  }
 }
